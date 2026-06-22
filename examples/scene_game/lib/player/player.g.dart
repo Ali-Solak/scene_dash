@@ -6,19 +6,8 @@ part of 'player.dart';
 // EcsGenerator
 // **************************************************************************
 
-mixin _$PlayerBundle implements SceneDashBundle {
-  @override
-  void insertInto(World world, Entity entity) {
-    final self = this as PlayerBundle;
-    world.ensureTagStore<Player>().add(entity.index);
-    world.ensureObjectStore<SceneNodeRef>().insert(entity.index, self.node);
-    world.ensureTagStore<PhysicsDriven>().add(entity.index);
-  }
-}
-
-class _$SpawnPlayerSystemAdapter
-    implements SystemAdapter, SystemAccessProvider {
-  _$SpawnPlayerSystemAdapter(this._system);
+class $SpawnPlayerSystemAdapter implements SystemAdapter, SystemAccessProvider {
+  $SpawnPlayerSystemAdapter(this._system);
 
   final SpawnPlayerSystem _system;
   late final Commands _p0;
@@ -38,14 +27,15 @@ class _$SpawnPlayerSystemAdapter
   }
 }
 
-base mixin _$SpawnPlayerSystem on GameSystem {
-  @override
-  SystemAdapter createAdapter() =>
-      _$SpawnPlayerSystemAdapter(this as SpawnPlayerSystem);
-}
+/// Schedulable descriptor for [SpawnPlayerSystem]. Pass to `app.addSystem` and reference in
+/// `after`/`before`.
+final spawnPlayerSystem = SystemDescriptor(
+  const SystemRef('package:scene_game/player/player.dart', 'SpawnPlayerSystem'),
+  () => $SpawnPlayerSystemAdapter(const SpawnPlayerSystem()),
+);
 
-class _$MovePlayerSystemAdapter implements SystemAdapter, SystemAccessProvider {
-  _$MovePlayerSystemAdapter(this._system);
+class $MovePlayerSystemAdapter implements SystemAdapter, SystemAccessProvider {
+  $MovePlayerSystemAdapter(this._system);
 
   final MovePlayerSystem _system;
   late final Query1<SceneNodeRef> _p0;
@@ -76,8 +66,19 @@ class _$MovePlayerSystemAdapter implements SystemAdapter, SystemAccessProvider {
   }
 }
 
-base mixin _$MovePlayerSystem on GameSystem {
+/// Schedulable descriptor for [MovePlayerSystem]. Pass to `app.addSystem` and reference in
+/// `after`/`before`.
+final movePlayerSystem = SystemDescriptor(
+  const SystemRef('package:scene_game/player/player.dart', 'MovePlayerSystem'),
+  () => $MovePlayerSystemAdapter(const MovePlayerSystem()),
+);
+
+mixin _$PlayerBundle implements SceneDashBundle {
   @override
-  SystemAdapter createAdapter() =>
-      _$MovePlayerSystemAdapter(this as MovePlayerSystem);
+  void insertInto(World world, Entity entity) {
+    final self = this as PlayerBundle;
+    world.ensureTagStore<Player>().add(entity.index);
+    world.ensureObjectStore<SceneNodeRef>().insert(entity.index, self.node);
+    world.ensureTagStore<PhysicsDriven>().add(entity.index);
+  }
 }

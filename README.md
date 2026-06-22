@@ -1,10 +1,6 @@
 # Scene-Dash
 
-A Bevy-inspired, **Dart-native** ECS and plugin layer for
-[`flutter_scene`](https://pub.dev/packages/flutter_scene). Scene-Dash gives you
-class-based plugins and systems, generated parameter injection, and cached
-sparse-set queries over **ordinary mutable Dart objects** while keeping the
-game-authoring surface tiny:
+Scene-Dash uses an object-based ECS designed around Dart. Components are ordinary mutable objects, queries return direct references, and generated adapters handle system and bundle wiring without runtime reflection. It integrates with flutter_scene while keeping the ECS core usable on its own.
 
 ```dart
 final game = Game(scene: scene)

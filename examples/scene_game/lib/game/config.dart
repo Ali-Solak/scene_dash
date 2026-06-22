@@ -69,3 +69,18 @@ const double cameraFollowSharpness = 8;
 // --- World ---
 
 const double gravityStrength = 18;
+
+// --- Physics collision layers ---
+
+/// Collision-group membership bits for the demo's physics bodies.
+///
+/// Used to classify physics-query results without rebuilding ECS-to-node lookup
+/// sets each frame: e.g. the lose-condition system reads `overlapSphere` hits and
+/// keeps only colliders whose [rock] bit is set. (Bits also feed Rapier's
+/// collision groups; the demo keeps collision *masks* permissive so contacts are
+/// unchanged.)
+abstract final class PhysicsLayers {
+  static const int player = 1 << 0;
+  static const int platform = 1 << 1;
+  static const int rock = 1 << 2;
+}

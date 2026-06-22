@@ -64,13 +64,22 @@ final class RockBundle with _$RockBundle {
         localTransform: Matrix4.translation(Vector3(x, rockSpawnY, rockSpawnZ)),
       )
       ..addComponent(RapierRigidBody(type: BodyType.dynamic_, ccdEnabled: true))
-      ..addComponent(RapierCollider(shape: SphereShape(radius: rockRadius)));
+      ..addComponent(buildRockCollider());
   }
 }
 
+/// The collider for a rock, tagged with [PhysicsLayers.rock] so lose-condition
+/// checks can classify a physics overlap hit by its collider layer instead of
+/// rebuilding a set of every rock each frame. The collision *mask* stays
+/// permissive (default) so rock contacts are unchanged.
+RapierCollider buildRockCollider() => RapierCollider(
+  shape: SphereShape(radius: rockRadius),
+  collisionLayer: PhysicsLayers.rock,
+);
+
 /// Fixed step: drop new rocks at the top while the game is running.
 @System()
-final class SpawnRocksSystem extends GameSystem with _$SpawnRocksSystem {
+final class SpawnRocksSystem extends GameSystem {
   const SpawnRocksSystem();
 
   void run(
@@ -89,7 +98,7 @@ final class SpawnRocksSystem extends GameSystem with _$SpawnRocksSystem {
 
 /// Despawns rocks that have rolled off the bottom into the void.
 @System()
-final class CleanupRocksSystem extends GameSystem with _$CleanupRocksSystem {
+final class CleanupRocksSystem extends GameSystem {
   const CleanupRocksSystem();
 
   void run(
@@ -97,9 +106,9 @@ final class CleanupRocksSystem extends GameSystem with _$CleanupRocksSystem {
     Commands commands,
   ) {
     rocks.each((entity, binding) {
-      final node = binding.node;
-      if (node.parent == null) return;
-      if (node.globalTransform.getTranslation().y < rockKillY) {
+      // The integration mounts bound nodes before the update phase, so a queried
+      // rock is already in the scene — no parent guard needed.
+      if (binding.node.globalTransform.getTranslation().y < rockKillY) {
         commands.despawn(entity);
       }
     });
@@ -115,15 +124,7 @@ final class RocksPlugin extends Plugin {
   void build(AppBuilder app) {
     app
       ..insertResource<RockSpawner>(RockSpawner())
-      ..addSystem(
-        const SpawnRocksSystem(),
-        schedule: Schedules.fixedPrePhysics,
-        label: const SystemLabel('rocks.spawn'),
-      )
-      ..addSystem(
-        const CleanupRocksSystem(),
-        schedule: Schedules.update,
-        label: const SystemLabel('rocks.cleanup'),
-      );
+      ..addSystem(spawnRocksSystem, schedule: Schedules.fixedPrePhysics)
+      ..addSystem(cleanupRocksSystem, schedule: Schedules.update);
   }
 }

@@ -74,7 +74,7 @@ final class PlayerBundle with _$PlayerBundle {
 
 /// Startup: spawn the one player.
 @System()
-final class SpawnPlayerSystem extends GameSystem with _$SpawnPlayerSystem {
+final class SpawnPlayerSystem extends GameSystem {
   const SpawnPlayerSystem();
 
   void run(Commands commands) {
@@ -87,7 +87,7 @@ final class SpawnPlayerSystem extends GameSystem with _$SpawnPlayerSystem {
 /// The controller has no gravity of its own, so a constant downward bias keeps
 /// the player on the slope and makes it fall once it walks off an edge.
 @System()
-final class MovePlayerSystem extends GameSystem with _$MovePlayerSystem {
+final class MovePlayerSystem extends GameSystem {
   const MovePlayerSystem();
 
   void run(
@@ -99,8 +99,8 @@ final class MovePlayerSystem extends GameSystem with _$MovePlayerSystem {
     if (game.status != GameStatus.playing) return;
     players.each((entity, binding) {
       final node = binding.node;
-      // Skip until the node is mounted under the RapierWorld.
-      if (node.parent == null) return;
+      // The integration mounts the player under the RapierWorld before the first
+      // step, so the node is already in the scene here.
       final controller = node
           .getComponent<RapierKinematicCharacterController>();
       if (controller == null) return;
@@ -125,15 +125,7 @@ final class PlayerPlugin extends Plugin {
   @override
   void build(AppBuilder app) {
     app
-      ..addSystem(
-        const SpawnPlayerSystem(),
-        schedule: Schedules.startup,
-        label: const SystemLabel('player.spawn'),
-      )
-      ..addSystem(
-        const MovePlayerSystem(),
-        schedule: Schedules.fixedPrePhysics,
-        label: const SystemLabel('player.move'),
-      );
+      ..addSystem(spawnPlayerSystem, schedule: Schedules.startup)
+      ..addSystem(movePlayerSystem, schedule: Schedules.fixedPrePhysics);
   }
 }

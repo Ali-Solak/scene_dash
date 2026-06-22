@@ -14,11 +14,7 @@ final class WorldPlugin extends Plugin {
 
   @override
   void build(AppBuilder app) {
-    app.addSystem(
-      const SetupWorldSystem(),
-      schedule: Schedules.startup,
-      label: const SystemLabel('world.setup'),
-    );
+    app.addSystem(setupWorldSystem, schedule: Schedules.startup);
   }
 }
 
@@ -28,7 +24,7 @@ final class WorldPlugin extends Plugin {
 /// `@Resource() Scene`. The ramp is a plain scene node, not an ECS entity: it
 /// never moves, so it carries a fixed Rapier body and matching box collider.
 @System()
-final class SetupWorldSystem extends GameSystem with _$SetupWorldSystem {
+final class SetupWorldSystem extends GameSystem {
   const SetupWorldSystem();
 
   void run(@Resource() Scene scene) {

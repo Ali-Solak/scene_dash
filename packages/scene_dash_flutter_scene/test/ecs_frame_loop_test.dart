@@ -92,4 +92,18 @@ void main() {
     loop.update(0.016);
     expect(log, <String>['update', 'renderSync', 'flush']);
   });
+
+  test('onBeforeUpdate fires before the update schedule (mount point)', () {
+    final log = <String>[];
+    final app = _appWithProbes(log);
+    final loop = EcsFrameLoop(
+      app,
+      onBeforeUpdate: () => log.add('mount'),
+      onFrameEnd: () => log.add('flush'),
+    )..ensureTimeResources();
+    app.start();
+
+    loop.update(0.016);
+    expect(log, <String>['mount', 'update', 'renderSync', 'flush']);
+  });
 }

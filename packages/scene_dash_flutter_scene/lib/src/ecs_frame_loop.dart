@@ -10,11 +10,16 @@ final class EcsFrameLoop {
   /// The engine this loop drives.
   final App app;
 
+  /// Called at the start of [update], before the `update` schedule — the point
+  /// where the integration mounts newly bound nodes and flushes them, so a
+  /// gameplay `update` system sees already-mounted nodes.
+  final void Function()? onBeforeUpdate;
+
   /// Called at the end of [update] (after `renderSync`, before the scene
   /// renders) — a safe boundary to flush deferred scene-graph mutations.
   final void Function()? onFrameEnd;
 
-  EcsFrameLoop(this.app, {this.onFrameEnd});
+  EcsFrameLoop(this.app, {this.onBeforeUpdate, this.onFrameEnd});
 
   /// Inserts default [FrameTime]/[FixedTime] resources if a plugin has not
   /// already provided them. Call before [App.start].
@@ -44,10 +49,12 @@ final class EcsFrameLoop {
     app.runSchedule(Schedules.fixedPrePhysics);
   }
 
-  /// Per-frame update: run [Schedules.update] then [Schedules.renderSync],
-  /// then [onFrameEnd] (e.g. flush scene-graph mutations) before render.
+  /// Per-frame update: mount newly bound nodes ([onBeforeUpdate]) so gameplay
+  /// sees them, run [Schedules.update] then [Schedules.renderSync], then
+  /// [onFrameEnd] (e.g. flush scene-graph mutations) before render.
   void update(double deltaSeconds) {
     app.world.resources.get<FrameTime>().delta = deltaSeconds;
+    onBeforeUpdate?.call();
     app.runSchedule(Schedules.update);
     app.runSchedule(Schedules.renderSync);
     onFrameEnd?.call();

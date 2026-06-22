@@ -26,3 +26,20 @@ final class SceneNodeRef {
 final class PhysicsDriven {
   const PhysicsDriven();
 }
+
+/// Integration-managed tag marking a [SceneNodeRef] entity whose node is mounted
+/// in the scene graph.
+///
+/// **This is integration state, not something game code authors.** The scene
+/// driver adds it when it mounts a bound node and removes it on unmount/despawn;
+/// bundles must never include it. Normal gameplay systems do not need it either:
+/// the integration guarantees nodes are mounted *before* the `update` phase runs
+/// (see [Game]), so a queried [SceneNodeRef] reached from an update system is
+/// already in the scene.
+///
+/// Filter on `Mounted` only for an advanced system that intentionally targets
+/// scene-mounted entities while running in an unusual lifecycle phase.
+@Tag()
+final class Mounted {
+  const Mounted();
+}

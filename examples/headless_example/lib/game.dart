@@ -49,6 +49,11 @@ final class MotionLog {
   int sampled = 0;
 }
 
+/// Captures the single player's X each update, to exercise `Single<T>`.
+final class PlayerProbe {
+  double x = -1;
+}
+
 // --- Bundle ---
 
 @Bundle()
@@ -66,7 +71,7 @@ final class PlayerBundle with _$PlayerBundle {
 // --- Systems ---
 
 @System()
-final class SpawnPlayerSystem extends GameSystem with _$SpawnPlayerSystem {
+final class SpawnPlayerSystem extends GameSystem {
   const SpawnPlayerSystem();
 
   void run(Commands commands, EventWriter<PlayerSpawned> spawned) {
@@ -78,7 +83,7 @@ final class SpawnPlayerSystem extends GameSystem with _$SpawnPlayerSystem {
 }
 
 @System()
-final class MovePlayerSystem extends GameSystem with _$MovePlayerSystem {
+final class MovePlayerSystem extends GameSystem {
   const MovePlayerSystem();
 
   void run(
@@ -94,8 +99,19 @@ final class MovePlayerSystem extends GameSystem with _$MovePlayerSystem {
   }
 }
 
+/// A top-level `@System` function with a `Single<Position>` parameter: the most
+/// concise system form — no class, no mixin, no constructor. Reads the one
+/// player's position directly.
 @System()
-final class CountSpawnsSystem extends GameSystem with _$CountSpawnsSystem {
+void probePlayer(
+  @Query(requires: [Player]) Single<Position> player,
+  @Resource() PlayerProbe probe,
+) {
+  probe.x = player.value.x;
+}
+
+@System()
+final class CountSpawnsSystem extends GameSystem {
   const CountSpawnsSystem();
 
   void run(EventReader<PlayerSpawned> spawned, @Resource() SpawnLog log) {
@@ -106,7 +122,7 @@ final class CountSpawnsSystem extends GameSystem with _$CountSpawnsSystem {
 /// A read-only `Query3` system: it samples every mover. All three components are
 /// reads (no `writes`), so it never conflicts with the writing systems.
 @System()
-final class TrackMotionSystem extends GameSystem with _$TrackMotionSystem {
+final class TrackMotionSystem extends GameSystem {
   const TrackMotionSystem();
 
   void run(
@@ -142,25 +158,11 @@ final class PlayerPlugin extends Plugin with _$PlayerPlugin {
       ..insertResource<FixedTime>(FixedTime()..delta = 0.5)
       ..insertResource<SpawnLog>(SpawnLog())
       ..insertResource<MotionLog>(MotionLog())
-      ..addSystem(
-        const SpawnPlayerSystem(),
-        schedule: Schedules.startup,
-        label: const SystemLabel('player.spawn'),
-      )
-      ..addSystem(
-        const MovePlayerSystem(),
-        schedule: Schedules.fixedPrePhysics,
-        label: const SystemLabel('player.move'),
-      )
-      ..addSystem(
-        const CountSpawnsSystem(),
-        schedule: Schedules.update,
-        label: const SystemLabel('player.countSpawns'),
-      )
-      ..addSystem(
-        const TrackMotionSystem(),
-        schedule: Schedules.update,
-        label: const SystemLabel('player.trackMotion'),
-      );
+      ..insertResource<PlayerProbe>(PlayerProbe())
+      ..addSystem(spawnPlayerSystem, schedule: Schedules.startup)
+      ..addSystem(movePlayerSystem, schedule: Schedules.fixedPrePhysics)
+      ..addSystem(countSpawnsSystem, schedule: Schedules.update)
+      ..addSystem(probePlayerSystem, schedule: Schedules.update)
+      ..addSystem(trackMotionSystem, schedule: Schedules.update);
   }
 }

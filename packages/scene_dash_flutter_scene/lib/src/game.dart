@@ -42,8 +42,24 @@ final class Game {
   /// startup). Also injectable into systems as an `@Resource()`.
   late final SceneCommands sceneCommands = SceneCommands(scene.root);
 
-  late final EcsFrameLoop _loop =
-      EcsFrameLoop(app, onFrameEnd: sceneCommands.flush);
+  /// Mounts entity-bound nodes into the scene. Owned by `Game` (not registered
+  /// in a schedule) so it can run *before* the `update` phase — see [_mountStep].
+  late final SceneNodeMountAdapter _mountAdapter =
+      SceneNodeMountAdapter(sceneCommands);
+
+  late final EcsFrameLoop _loop = EcsFrameLoop(
+    app,
+    onBeforeUpdate: _mountStep,
+    onFrameEnd: sceneCommands.flush,
+  );
+
+  /// Mounts newly bound nodes and flushes them, so a gameplay `update` system
+  /// sees already-parented (and `Mounted`-tagged) nodes. Runs before the
+  /// `update` schedule each frame, and once at startup.
+  void _mountStep() {
+    _mountAdapter.run();
+    sceneCommands.flush();
+  }
 
   bool _started = false;
   bool _shutdown = false;
@@ -67,6 +83,21 @@ final class Game {
     return this;
   }
 
+  /// Inserts an externally-constructed resource (e.g. one the Flutter widget
+  /// also holds) before [start]. The single authoring path for resources —
+  /// fails loud on a duplicate; use [replaceResource] to swap intentionally.
+  Game insertResource<T extends Object>(T resource) {
+    app.insertResource<T>(resource);
+    return this;
+  }
+
+  /// Replaces (or inserts) a resource before [start]. Use when swapping is
+  /// intentional.
+  Game replaceResource<T extends Object>(T resource) {
+    app.replaceResource<T>(resource);
+    return this;
+  }
+
   /// Finalizes the app and attaches the scene driver to the scene root.
   ///
   /// Call `await Scene.initializeStaticResources()` before rendering (as the
@@ -83,29 +114,28 @@ final class Game {
     app.world.resources
       ..insert<Scene>(scene)
       ..insert<SceneCommands>(sceneCommands);
-    // Standard integration systems (renderSync): auto-mount entity-bound nodes so a
-    // `@Bundle` can create its own node and simply become visible, and sync the
-    // standard SceneTransform onto bound nodes.
-    app
-      ..addSystemAdapter(
-        SceneNodeMountAdapter(sceneCommands),
-        schedule: Schedules.renderSync,
-        label: const SystemLabel('scene.mountNodes'),
-      )
-      ..addSystemAdapter(
-        SyncSceneNodesAdapter<SceneTransform>.full(
-          (transform, target) => target.setFromTranslationRotationScale(
-            transform.translation,
-            transform.rotation,
-            transform.scale,
-          ),
+    // Standard integration system (renderSync): sync the standard SceneTransform
+    // onto bound nodes after the gameplay `update` phase. Node mounting is *not*
+    // a renderSync system — it runs before `update` (see _mountStep) so gameplay
+    // sees mounted nodes — so a `@Bundle` can create its own node and simply
+    // become visible.
+    app.addSystemAdapter(
+      SyncSceneNodesAdapter<SceneTransform>.full(
+        (transform, target) => target.setFromTranslationRotationScale(
+          transform.translation,
+          transform.rotation,
+          transform.scale,
         ),
-        schedule: Schedules.renderSync,
-        label: const SystemLabel('scene.syncTransform'),
-      );
+      ),
+      schedule: Schedules.renderSync,
+      label: const SystemLabel('scene.syncTransform'),
+    );
     app.start();
-    // Apply any scene mutations queued by startup systems before first render.
-    sceneCommands.flush();
+    // The mount adapter is not scheduled, so initialize it explicitly now that
+    // stores exist, then mount any nodes spawned by startup systems and flush so
+    // they are parented before the first frame's fixed/update steps run.
+    _mountAdapter.initialize(app.world);
+    _mountStep();
     final driver = EcsSceneDriver(_loop);
     scene.root.addComponent(driver);
     _driver = driver;

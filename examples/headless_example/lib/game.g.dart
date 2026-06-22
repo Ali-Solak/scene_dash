@@ -6,22 +6,8 @@ part of 'game.dart';
 // EcsGenerator
 // **************************************************************************
 
-mixin _$PlayerBundle implements SceneDashBundle {
-  @override
-  void insertInto(World world, Entity entity) {
-    final self = this as PlayerBundle;
-    world.ensureObjectStore<Position>().insert(entity.index, self.position);
-    world.ensureObjectStore<Velocity>().insert(entity.index, self.velocity);
-    world
-        .ensureObjectStore<Acceleration>()
-        .insert(entity.index, self.acceleration);
-    world.ensureTagStore<Player>().add(entity.index);
-  }
-}
-
-class _$SpawnPlayerSystemAdapter
-    implements SystemAdapter, SystemAccessProvider {
-  _$SpawnPlayerSystemAdapter(this._system);
+class $SpawnPlayerSystemAdapter implements SystemAdapter, SystemAccessProvider {
+  $SpawnPlayerSystemAdapter(this._system);
 
   final SpawnPlayerSystem _system;
   late final Commands _p0;
@@ -35,10 +21,8 @@ class _$SpawnPlayerSystemAdapter
   }
 
   @override
-  SystemAccess get access => const SystemAccess(
-        reads: <Type>{},
-        writes: <Type>{},
-      );
+  SystemAccess get access =>
+      const SystemAccess(reads: <Type>{}, writes: <Type>{});
 
   @override
   void run() {
@@ -46,14 +30,15 @@ class _$SpawnPlayerSystemAdapter
   }
 }
 
-base mixin _$SpawnPlayerSystem on GameSystem {
-  @override
-  SystemAdapter createAdapter() =>
-      _$SpawnPlayerSystemAdapter(this as SpawnPlayerSystem);
-}
+/// Schedulable descriptor for [SpawnPlayerSystem]. Pass to `app.addSystem` and reference in
+/// `after`/`before`.
+final spawnPlayerSystem = SystemDescriptor(
+  const SystemRef('package:headless_example/game.dart', 'SpawnPlayerSystem'),
+  () => $SpawnPlayerSystemAdapter(const SpawnPlayerSystem()),
+);
 
-class _$MovePlayerSystemAdapter implements SystemAdapter, SystemAccessProvider {
-  _$MovePlayerSystemAdapter(this._system);
+class $MovePlayerSystemAdapter implements SystemAdapter, SystemAccessProvider {
+  $MovePlayerSystemAdapter(this._system);
 
   final MovePlayerSystem _system;
   late final Query2<Position, Velocity> _p0;
@@ -65,15 +50,15 @@ class _$MovePlayerSystemAdapter implements SystemAdapter, SystemAccessProvider {
     world.ensureObjectStore<Velocity>();
     world.ensureTagStore<Player>();
     _p0 = world.query2<Position, Velocity>(
-        withTypes: const <Type>[Player], withoutTypes: const <Type>[]);
+      withTypes: const <Type>[Player],
+      withoutTypes: const <Type>[],
+    );
     _p1 = world.resources.get<FixedTime>();
   }
 
   @override
-  SystemAccess get access => const SystemAccess(
-        reads: <Type>{Velocity},
-        writes: <Type>{Position},
-      );
+  SystemAccess get access =>
+      const SystemAccess(reads: <Type>{Velocity}, writes: <Type>{Position});
 
   @override
   void run() {
@@ -81,15 +66,15 @@ class _$MovePlayerSystemAdapter implements SystemAdapter, SystemAccessProvider {
   }
 }
 
-base mixin _$MovePlayerSystem on GameSystem {
-  @override
-  SystemAdapter createAdapter() =>
-      _$MovePlayerSystemAdapter(this as MovePlayerSystem);
-}
+/// Schedulable descriptor for [MovePlayerSystem]. Pass to `app.addSystem` and reference in
+/// `after`/`before`.
+final movePlayerSystem = SystemDescriptor(
+  const SystemRef('package:headless_example/game.dart', 'MovePlayerSystem'),
+  () => $MovePlayerSystemAdapter(const MovePlayerSystem()),
+);
 
-class _$CountSpawnsSystemAdapter
-    implements SystemAdapter, SystemAccessProvider {
-  _$CountSpawnsSystemAdapter(this._system);
+class $CountSpawnsSystemAdapter implements SystemAdapter, SystemAccessProvider {
+  $CountSpawnsSystemAdapter(this._system);
 
   final CountSpawnsSystem _system;
   late final EventReader<PlayerSpawned> _p0;
@@ -103,10 +88,8 @@ class _$CountSpawnsSystemAdapter
   }
 
   @override
-  SystemAccess get access => const SystemAccess(
-        reads: <Type>{},
-        writes: <Type>{},
-      );
+  SystemAccess get access =>
+      const SystemAccess(reads: <Type>{}, writes: <Type>{});
 
   @override
   void run() {
@@ -114,15 +97,15 @@ class _$CountSpawnsSystemAdapter
   }
 }
 
-base mixin _$CountSpawnsSystem on GameSystem {
-  @override
-  SystemAdapter createAdapter() =>
-      _$CountSpawnsSystemAdapter(this as CountSpawnsSystem);
-}
+/// Schedulable descriptor for [CountSpawnsSystem]. Pass to `app.addSystem` and reference in
+/// `after`/`before`.
+final countSpawnsSystem = SystemDescriptor(
+  const SystemRef('package:headless_example/game.dart', 'CountSpawnsSystem'),
+  () => $CountSpawnsSystemAdapter(const CountSpawnsSystem()),
+);
 
-class _$TrackMotionSystemAdapter
-    implements SystemAdapter, SystemAccessProvider {
-  _$TrackMotionSystemAdapter(this._system);
+class $TrackMotionSystemAdapter implements SystemAdapter, SystemAccessProvider {
+  $TrackMotionSystemAdapter(this._system);
 
   final TrackMotionSystem _system;
   late final Query3<Position, Velocity, Acceleration> _p0;
@@ -134,15 +117,17 @@ class _$TrackMotionSystemAdapter
     world.ensureObjectStore<Velocity>();
     world.ensureObjectStore<Acceleration>();
     _p0 = world.query3<Position, Velocity, Acceleration>(
-        withTypes: const <Type>[], withoutTypes: const <Type>[]);
+      withTypes: const <Type>[],
+      withoutTypes: const <Type>[],
+    );
     _p1 = world.resources.get<MotionLog>();
   }
 
   @override
   SystemAccess get access => const SystemAccess(
-        reads: <Type>{Position, Velocity, Acceleration},
-        writes: <Type>{},
-      );
+    reads: <Type>{Position, Velocity, Acceleration},
+    writes: <Type>{},
+  );
 
   @override
   void run() {
@@ -150,10 +135,59 @@ class _$TrackMotionSystemAdapter
   }
 }
 
-base mixin _$TrackMotionSystem on GameSystem {
+/// Schedulable descriptor for [TrackMotionSystem]. Pass to `app.addSystem` and reference in
+/// `after`/`before`.
+final trackMotionSystem = SystemDescriptor(
+  const SystemRef('package:headless_example/game.dart', 'TrackMotionSystem'),
+  () => $TrackMotionSystemAdapter(const TrackMotionSystem()),
+);
+
+class $ProbePlayerAdapter implements SystemAdapter, SystemAccessProvider {
+  late final Single<Position> _p0;
+  late final PlayerProbe _p1;
+
   @override
-  SystemAdapter createAdapter() =>
-      _$TrackMotionSystemAdapter(this as TrackMotionSystem);
+  void initialize(World world) {
+    world.ensureObjectStore<Position>();
+    world.ensureTagStore<Player>();
+    _p0 = Single<Position>(
+      world.query1<Position>(
+        withTypes: const <Type>[Player],
+        withoutTypes: const <Type>[],
+      ),
+    );
+    _p1 = world.resources.get<PlayerProbe>();
+  }
+
+  @override
+  SystemAccess get access =>
+      const SystemAccess(reads: <Type>{Position}, writes: <Type>{});
+
+  @override
+  void run() {
+    probePlayer(_p0, _p1);
+  }
+}
+
+/// Schedulable descriptor for [probePlayer]. Pass to `app.addSystem` and reference in
+/// `after`/`before`.
+final probePlayerSystem = SystemDescriptor(
+  const SystemRef('package:headless_example/game.dart', 'probePlayer'),
+  () => $ProbePlayerAdapter(),
+);
+
+mixin _$PlayerBundle implements SceneDashBundle {
+  @override
+  void insertInto(World world, Entity entity) {
+    final self = this as PlayerBundle;
+    world.ensureObjectStore<Position>().insert(entity.index, self.position);
+    world.ensureObjectStore<Velocity>().insert(entity.index, self.velocity);
+    world.ensureObjectStore<Acceleration>().insert(
+      entity.index,
+      self.acceleration,
+    );
+    world.ensureTagStore<Player>().add(entity.index);
+  }
 }
 
 base mixin _$PlayerPlugin on Plugin {

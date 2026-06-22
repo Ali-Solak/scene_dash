@@ -1,19 +1,14 @@
-import 'system_adapter.dart';
-
-/// Base class for user-authored systems.
+/// Marker base class for user-authored `@System` classes.
 ///
 /// A `@System` class extends [GameSystem] and declares a synchronous `run(...)`
-/// method whose parameters (queries, resources, commands, event readers and
-/// writers) are injected by a generated [SystemAdapter].
+/// method whose parameters (queries, `Single`/`OptionalSingle`, resources,
+/// commands, event readers and writers) are injected by a generated adapter.
 ///
-/// The generator emits a `mixin _$YourSystem on YourSystem` that implements
-/// [createAdapter]; apply it with `class YourSystem extends GameSystem with
-/// _$YourSystem`. `AppBuilder.addSystem` calls [createAdapter] to obtain the
-/// adapter, so game code registers the system itself, never the adapter.
+/// The generator emits a public `$YourSystemAdapter` and a top-level
+/// `SystemDescriptor` (e.g. `yourSystem`); game code registers the system by
+/// passing that descriptor to `AppBuilder.addSystem`. There is no `with _$…`
+/// mixin: a class system carries no wiring itself, so this base is just a marker
+/// the generator recognizes.
 abstract base class GameSystem {
   const GameSystem();
-
-  /// Builds the generated adapter that injects this system's parameters and
-  /// invokes its `run` method. Provided by the generated `_$YourSystem` mixin.
-  SystemAdapter createAdapter();
 }

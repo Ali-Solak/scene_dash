@@ -34,19 +34,18 @@ Future<void> main() async {
   final gameState = GameState();
   final hudState = HudState(gameState);
   final cameraRig = CameraRig();
-  final impact = ImpactMotion();
 
+  // Resources the Flutter widget also holds are constructed here and inserted
+  // once through the game;
   final game = Game(scene: scene)
     ..addPlugin(PhysicsPlugin(physics))
     ..addPlugin(const WorldPlugin())
     ..addPlugin(const PlayerPlugin())
     ..addPlugin(const RocksPlugin())
-    ..addPlugin(const RulesPlugin());
-  game.world.resources
-    ..insert<InputState>(input)
-    ..insert<GameState>(gameState)
-    ..insert<CameraRig>(cameraRig)
-    ..insert<ImpactMotion>(impact);
+    ..addPlugin(const RulesPlugin())
+    ..insertResource<InputState>(input)
+    ..insertResource<GameState>(gameState)
+    ..insertResource<CameraRig>(cameraRig);
 
   await game.start();
 

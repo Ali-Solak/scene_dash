@@ -112,6 +112,62 @@ void main() {
     expect(newNode.parent, same(root), reason: 'new node mounted');
   });
 
+  test('tags the entity Mounted on mount and clears it on despawn', () {
+    final root = Node();
+    final commands = SceneCommands(root);
+    final node = Node();
+    final world = World()
+      ..stores.register<SceneNodeRef>(ObjectComponentStore<SceneNodeRef>());
+    final entity = world.entities.spawn();
+    world.insertNow<SceneNodeRef>(entity, SceneNodeRef(node));
+
+    final adapter = SceneNodeMountAdapter(commands)..initialize(world);
+    expect(world.has<Mounted>(entity), isFalse);
+
+    adapter.run();
+    expect(world.has<Mounted>(entity), isTrue, reason: 'tagged on mount');
+
+    world.despawnNow(entity); // strips Mounted with every other store
+    adapter.run();
+    expect(world.isAlive(entity), isFalse);
+  });
+
+  test('clears Mounted when only the SceneNodeRef component is removed', () {
+    final root = Node();
+    final commands = SceneCommands(root);
+    final node = Node();
+    final world = World()
+      ..stores.register<SceneNodeRef>(ObjectComponentStore<SceneNodeRef>());
+    final entity = world.entities.spawn();
+    world.insertNow<SceneNodeRef>(entity, SceneNodeRef(node));
+
+    final adapter = SceneNodeMountAdapter(commands)..initialize(world);
+    adapter.run();
+    expect(world.has<Mounted>(entity), isTrue);
+
+    world.removeNow<SceneNodeRef>(entity); // entity stays alive
+    adapter.run();
+    expect(world.has<Mounted>(entity), isFalse, reason: 'untagged on unmount');
+  });
+
+  test('keeps the entity Mounted across a node replacement', () {
+    final root = Node();
+    final commands = SceneCommands(root);
+    final world = World()
+      ..stores.register<SceneNodeRef>(ObjectComponentStore<SceneNodeRef>());
+    final entity = world.entities.spawn();
+    world.insertNow<SceneNodeRef>(entity, SceneNodeRef(Node()));
+
+    final adapter = SceneNodeMountAdapter(commands)..initialize(world);
+    adapter.run();
+    commands.flush();
+    expect(world.has<Mounted>(entity), isTrue);
+
+    world.insertNow<SceneNodeRef>(entity, SceneNodeRef(Node())); // replace node
+    adapter.run();
+    expect(world.has<Mounted>(entity), isTrue, reason: 'still mounted');
+  });
+
   test('does not auto-detach a game-parented node when despawned', () {
     final root = Node();
     final elsewhere = Node();

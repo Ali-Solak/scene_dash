@@ -6,34 +6,30 @@ part of 'rules.dart';
 // EcsGenerator
 // **************************************************************************
 
-class _$GameRulesSystemAdapter implements SystemAdapter, SystemAccessProvider {
-  _$GameRulesSystemAdapter(this._system);
+class $GameRulesSystemAdapter implements SystemAdapter, SystemAccessProvider {
+  $GameRulesSystemAdapter(this._system);
 
   final GameRulesSystem _system;
-  late final Query1<SceneNodeRef> _p0;
-  late final Query1<SceneNodeRef> _p1;
-  late final PhysicsWorld _p2;
-  late final GameState _p3;
-  late final FrameTime _p4;
-  late final ImpactMotion _p5;
+  late final Single<SceneNodeRef> _p0;
+  late final PhysicsWorld _p1;
+  late final GameState _p2;
+  late final FrameTime _p3;
+  late final ImpactMotion _p4;
 
   @override
   void initialize(World world) {
     world.ensureObjectStore<SceneNodeRef>();
     world.ensureTagStore<Player>();
-    world.ensureTagStore<Rock>();
-    _p0 = world.query1<SceneNodeRef>(
-      withTypes: const <Type>[Player],
-      withoutTypes: const <Type>[],
+    _p0 = Single<SceneNodeRef>(
+      world.query1<SceneNodeRef>(
+        withTypes: const <Type>[Player],
+        withoutTypes: const <Type>[],
+      ),
     );
-    _p1 = world.query1<SceneNodeRef>(
-      withTypes: const <Type>[Rock],
-      withoutTypes: const <Type>[],
-    );
-    _p2 = world.resources.get<PhysicsWorld>();
-    _p3 = world.resources.get<GameState>();
-    _p4 = world.resources.get<FrameTime>();
-    _p5 = world.resources.get<ImpactMotion>();
+    _p1 = world.resources.get<PhysicsWorld>();
+    _p2 = world.resources.get<GameState>();
+    _p3 = world.resources.get<FrameTime>();
+    _p4 = world.resources.get<ImpactMotion>();
   }
 
   @override
@@ -42,21 +38,22 @@ class _$GameRulesSystemAdapter implements SystemAdapter, SystemAccessProvider {
 
   @override
   void run() {
-    _system.run(_p0, _p1, _p2, _p3, _p4, _p5);
+    _system.run(_p0, _p1, _p2, _p3, _p4);
   }
 }
 
-base mixin _$GameRulesSystem on GameSystem {
-  @override
-  SystemAdapter createAdapter() =>
-      _$GameRulesSystemAdapter(this as GameRulesSystem);
-}
+/// Schedulable descriptor for [GameRulesSystem]. Pass to `app.addSystem` and reference in
+/// `after`/`before`.
+final gameRulesSystem = SystemDescriptor(
+  const SystemRef('package:scene_game/rules/rules.dart', 'GameRulesSystem'),
+  () => $GameRulesSystemAdapter(const GameRulesSystem()),
+);
 
-class _$PlayerViewSystemAdapter implements SystemAdapter, SystemAccessProvider {
-  _$PlayerViewSystemAdapter(this._system);
+class $PlayerViewSystemAdapter implements SystemAdapter, SystemAccessProvider {
+  $PlayerViewSystemAdapter(this._system);
 
   final PlayerViewSystem _system;
-  late final Query1<SceneNodeRef> _p0;
+  late final Single<SceneNodeRef> _p0;
   late final CameraRig _p1;
   late final ImpactMotion _p2;
   late final FrameTime _p3;
@@ -65,9 +62,11 @@ class _$PlayerViewSystemAdapter implements SystemAdapter, SystemAccessProvider {
   void initialize(World world) {
     world.ensureObjectStore<SceneNodeRef>();
     world.ensureTagStore<Player>();
-    _p0 = world.query1<SceneNodeRef>(
-      withTypes: const <Type>[Player],
-      withoutTypes: const <Type>[],
+    _p0 = Single<SceneNodeRef>(
+      world.query1<SceneNodeRef>(
+        withTypes: const <Type>[Player],
+        withoutTypes: const <Type>[],
+      ),
     );
     _p1 = world.resources.get<CameraRig>();
     _p2 = world.resources.get<ImpactMotion>();
@@ -84,14 +83,15 @@ class _$PlayerViewSystemAdapter implements SystemAdapter, SystemAccessProvider {
   }
 }
 
-base mixin _$PlayerViewSystem on GameSystem {
-  @override
-  SystemAdapter createAdapter() =>
-      _$PlayerViewSystemAdapter(this as PlayerViewSystem);
-}
+/// Schedulable descriptor for [PlayerViewSystem]. Pass to `app.addSystem` and reference in
+/// `after`/`before`.
+final playerViewSystem = SystemDescriptor(
+  const SystemRef('package:scene_game/rules/rules.dart', 'PlayerViewSystem'),
+  () => $PlayerViewSystemAdapter(const PlayerViewSystem()),
+);
 
-class _$RestartSystemAdapter implements SystemAdapter, SystemAccessProvider {
-  _$RestartSystemAdapter(this._system);
+class $RestartSystemAdapter implements SystemAdapter, SystemAccessProvider {
+  $RestartSystemAdapter(this._system);
 
   final RestartSystem _system;
   late final Query1<SceneNodeRef> _p0;
@@ -134,8 +134,9 @@ class _$RestartSystemAdapter implements SystemAdapter, SystemAccessProvider {
   }
 }
 
-base mixin _$RestartSystem on GameSystem {
-  @override
-  SystemAdapter createAdapter() =>
-      _$RestartSystemAdapter(this as RestartSystem);
-}
+/// Schedulable descriptor for [RestartSystem]. Pass to `app.addSystem` and reference in
+/// `after`/`before`.
+final restartSystem = SystemDescriptor(
+  const SystemRef('package:scene_game/rules/rules.dart', 'RestartSystem'),
+  () => $RestartSystemAdapter(const RestartSystem()),
+);

@@ -21,45 +21,73 @@ import 'scene_node_ref.dart';
 /// — clean up its scene node automatically, with no manual `SceneCommands.remove`
 /// in game code.
 ///
-/// [Game] registers this in [Schedules.renderSync] automatically.
+/// It also maintains the integration-managed [Mounted] tag: each mounted entity
+/// gains [Mounted] and loses it on unmount, so advanced systems can filter on
+/// scene-mounted entities.
+///
+/// [Game] runs this *before* the `update` phase each frame (and once at startup),
+/// so a bound node is already parented and tagged by the time gameplay reads it.
 final class SceneNodeMountAdapter implements SystemAdapter {
   final SceneCommands _sceneCommands;
+  late final World _world;
   late final Query1<SceneNodeRef> _bound;
 
-  /// Nodes this adapter mounted and is responsible for detaching.
-  final Set<Node> _mounted = <Node>{};
+  /// Nodes this adapter mounted, mapped to the entity they were mounted for.
+  final Map<Node, Entity> _mounted = <Node, Entity>{};
 
   /// Scratch set of nodes seen this run (reused to avoid per-frame allocation).
   final Set<Node> _seen = <Node>{};
+
+  /// Scratch lists of entities to (un)tag, applied after the bound query stops
+  /// iterating (tag stores cannot be mutated mid-query). Reused each run.
+  final List<Entity> _toTag = <Entity>[];
+  final List<Entity> _toUntag = <Entity>[];
 
   SceneNodeMountAdapter(this._sceneCommands);
 
   @override
   void initialize(World world) {
-    world.ensureObjectStore<SceneNodeRef>();
+    _world = world;
+    world
+      ..ensureObjectStore<SceneNodeRef>()
+      ..ensureTagStore<Mounted>();
     _bound = world.query1<SceneNodeRef>();
   }
 
   @override
   void run() {
     _seen.clear();
+    _toTag.clear();
+    _toUntag.clear();
     _bound.each((entity, binding) {
       final node = binding.node;
       _seen.add(node);
-      if (_mounted.contains(node)) return;
+      if (_mounted.containsKey(node)) return;
       // Adopt only nodes that have no parent yet; a node the game parented
       // itself is left alone (and never tracked for auto-detach).
       if (node.parent == null) {
         _sceneCommands.add(node);
-        _mounted.add(node);
+        _mounted[node] = entity;
+        _toTag.add(entity);
       }
     });
     // Detach nodes we mounted whose binding disappeared (despawn, component
     // removal, or replacement with a different node).
-    _mounted.removeWhere((node) {
+    _mounted.removeWhere((node, entity) {
       if (_seen.contains(node)) return false;
       _sceneCommands.remove(node);
+      _toUntag.add(entity);
       return true;
     });
+    // Apply Mounted-tag changes now the bound query is no longer iterating.
+    // Untag first so a same-entity node replacement (untag old, tag new) ends
+    // up tagged. Despawn already strips the tag, so only touch live entities.
+    final mounted = _world.ensureTagStore<Mounted>();
+    for (final entity in _toUntag) {
+      if (_world.isAlive(entity)) mounted.removeEntityIndex(entity.index);
+    }
+    for (final entity in _toTag) {
+      if (_world.isAlive(entity)) mounted.add(entity.index);
+    }
   }
 }

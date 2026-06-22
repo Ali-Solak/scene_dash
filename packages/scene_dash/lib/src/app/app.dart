@@ -4,9 +4,9 @@ import '../schedule/access_conflict.dart';
 import '../schedule/schedule.dart';
 import '../schedule/schedule_label.dart';
 import '../schedule/schedules.dart';
+import '../schedule/system_descriptor.dart';
 import '../schedule/system_label.dart';
 import '../schedule/system_registration.dart';
-import '../system/game_system.dart';
 import '../system/system_adapter.dart';
 import '../world/world.dart';
 import 'app_builder.dart';
@@ -78,18 +78,17 @@ final class App implements AppBuilder {
 
   @override
   AppBuilder addSystem(
-    GameSystem system, {
+    SystemDescriptor descriptor, {
     required ScheduleLabel schedule,
-    required SystemLabel label,
-    List<SystemLabel> after = const <SystemLabel>[],
-    List<SystemLabel> before = const <SystemLabel>[],
+    List<SystemDescriptor> after = const <SystemDescriptor>[],
+    List<SystemDescriptor> before = const <SystemDescriptor>[],
   }) {
     return addSystemAdapter(
-      system.createAdapter(),
+      descriptor.buildAdapter(),
       schedule: schedule,
-      label: label,
-      after: after,
-      before: before,
+      label: descriptor.ref.label,
+      after: <SystemLabel>[for (final d in after) d.ref.label],
+      before: <SystemLabel>[for (final d in before) d.ref.label],
     );
   }
 
@@ -126,6 +125,20 @@ final class App implements AppBuilder {
 
   @override
   AppBuilder insertResource<T extends Object>(T resource) {
+    _assertOpen();
+    if (world.resources.contains<T>()) {
+      throw StateError(
+        'A resource of type $T is already inserted. Each resource should be '
+        'owned by one place; call replaceResource<$T>() to intentionally swap '
+        'it.',
+      );
+    }
+    world.resources.insert<T>(resource);
+    return this;
+  }
+
+  @override
+  AppBuilder replaceResource<T extends Object>(T resource) {
     _assertOpen();
     world.resources.insert<T>(resource);
     return this;

@@ -18,30 +18,24 @@ part 'rules.g.dart';
 /// [groundProbeDistance]. Hit by a rock: any rock is within the combined radii
 /// of the player.
 @System()
-final class GameRulesSystem extends GameSystem with _$GameRulesSystem {
+final class GameRulesSystem extends GameSystem {
   const GameRulesSystem();
 
   void run(
-    @Query(requires: [Player]) Query1<SceneNodeRef> players,
-    @Query(requires: [Rock]) Query1<SceneNodeRef> rocks,
+    @Query(requires: [Player]) Single<SceneNodeRef> player,
     @Resource() PhysicsWorld world,
     @Resource() GameState game,
     @Resource() FrameTime time,
     @Resource() ImpactMotion impact,
   ) {
     if (game.status != GameStatus.playing) return;
-    game.addSurvival(time.delta);
 
-    Node? playerNode;
-    Vector3? playerPos;
-    players.each((entity, binding) {
-      if (binding.node.parent == null) return;
-      playerNode = binding.node;
-      playerPos = binding.node.globalTransform.getTranslation();
-    });
-    final node = playerNode;
-    final pos = playerPos;
-    if (node == null || pos == null) return;
+    // The single player always exists (spawned at startup, never despawned) and
+    // the integration mounts its node before update, so it is already in scene.
+    final node = player.value.node;
+    final pos = node.globalTransform.getTranslation();
+
+    game.addSurvival(time.delta);
 
     if (game.survived > startupGrace) {
       final ground = world.raycast(
@@ -57,31 +51,27 @@ final class GameRulesSystem extends GameSystem with _$GameRulesSystem {
       }
     }
 
-    final rockNodes = <Node>{};
-    rocks.each((entity, binding) {
-      if (binding.node.parent == null) return;
-      rockNodes.add(binding.node);
-    });
-
     final hits = world.overlapSphere(
       pos,
       playerRadius + hitPadding,
+      layerMask: PhysicsLayers.rock,
       includeFixed: false,
       includeKinematic: false,
       includeDynamic: true,
       includeTriggers: false,
     );
     for (final hit in hits) {
-      if (rockNodes.contains(hit.node)) {
-        _startImpact(
-          node,
-          pos,
-          hit.node.globalTransform.getTranslation(),
-          impact,
-        );
-        game.lose('A rock got you');
-        return;
+      // overlapSphere's layerMask is not yet honored by flutter_scene_rapier, so
+      // classify rocks on the result side by collider layer — a handful of hits,
+      // not a rebuilt Set of every rock each frame.
+      final collider = hit.collider;
+      if (collider is! RapierCollider ||
+          collider.collisionLayer & PhysicsLayers.rock == 0) {
+        continue;
       }
+      _startImpact(node, pos, hit.node.globalTransform.getTranslation(), impact);
+      game.lose('A rock got you');
+      return;
     }
   }
 
@@ -104,25 +94,17 @@ final class GameRulesSystem extends GameSystem with _$GameRulesSystem {
 
 /// Keeps camera state current and runs the visible post-hit tumble.
 @System()
-final class PlayerViewSystem extends GameSystem with _$PlayerViewSystem {
+final class PlayerViewSystem extends GameSystem {
   const PlayerViewSystem();
 
   void run(
-    @Query(requires: [Player]) Query1<SceneNodeRef> players,
+    @Query(requires: [Player]) Single<SceneNodeRef> player,
     @Resource() CameraRig camera,
     @Resource() ImpactMotion impact,
     @Resource() FrameTime time,
   ) {
-    Node? player;
-    Vector3? position;
-    players.each((entity, binding) {
-      if (binding.node.parent == null) return;
-      player = binding.node;
-      position = binding.node.globalTransform.getTranslation();
-    });
-    final node = player;
-    final pos = position;
-    if (node == null || pos == null) return;
+    final node = player.value.node;
+    final pos = node.globalTransform.getTranslation();
 
     if (impact.active) {
       impact.advance(time.delta);
@@ -137,7 +119,7 @@ final class PlayerViewSystem extends GameSystem with _$PlayerViewSystem {
 
 /// Restarts after a loss by clearing rocks and restoring the player body.
 @System()
-final class RestartSystem extends GameSystem with _$RestartSystem {
+final class RestartSystem extends GameSystem {
   const RestartSystem();
 
   void run(
@@ -182,20 +164,11 @@ final class RulesPlugin extends Plugin {
   @override
   void build(AppBuilder app) {
     app
-      ..addSystem(
-        const RestartSystem(),
-        schedule: Schedules.frameStart,
-        label: const SystemLabel('rules.restart'),
-      )
-      ..addSystem(
-        const GameRulesSystem(),
-        schedule: Schedules.update,
-        label: const SystemLabel('rules.evaluate'),
-      )
-      ..addSystem(
-        const PlayerViewSystem(),
-        schedule: Schedules.update,
-        label: const SystemLabel('rules.playerView'),
-      );
+      // RulesPlugin owns ImpactMotion: only its systems use it, so it is created
+      // and registered here rather than in main().
+      ..insertResource<ImpactMotion>(ImpactMotion())
+      ..addSystem(restartSystem, schedule: Schedules.frameStart)
+      ..addSystem(gameRulesSystem, schedule: Schedules.update)
+      ..addSystem(playerViewSystem, schedule: Schedules.update);
   }
 }

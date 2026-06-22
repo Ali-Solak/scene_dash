@@ -31,6 +31,8 @@ void main() {
     app.runSchedule(Schedules.update);
     expect(app.world.resources.get<SpawnLog>().count, 1);
     expect(app.world.resources.get<MotionLog>().sampled, 1);
+    // The generated Single<Position> adapter resolved the one player directly.
+    expect(app.world.resources.get<PlayerProbe>().x, closeTo(0.5, 1e-9));
 
     // The generated access metadata is honoured: the writing system (Position)
     // and the read-only Query3 system are in different schedules / non-conflicting,

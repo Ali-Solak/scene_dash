@@ -48,6 +48,71 @@ final class Query1<A> extends Query {
     }
   }
 
+  /// Whether no live entity matches this query. Stops at the first match, so it
+  /// is cheaper than counting; allocation-free.
+  bool get isEmpty {
+    final driver = Query.chooseDriver(_driverCandidates);
+    final driverIsA = identical(driver, _a);
+    _world.beginQuery();
+    try {
+      for (var i = 0; i < driver.length; i++) {
+        final entityIndex = driver.entityIndexAt(i);
+        if ((driverIsA ? i : _a.denseIndexOf(entityIndex)) < 0) continue;
+        if (!Query.passesFilters(entityIndex, _withStores, _withoutStores)) {
+          continue;
+        }
+        return false;
+      }
+      return true;
+    } finally {
+      _world.endQuery();
+    }
+  }
+
+  /// Resolves the single matching entity as `(entity, value)`, or `null` when
+  /// none match. Throws [StateError] when more than one entity matches.
+  ///
+  /// One small record is allocated per match — intended for singleton queries
+  /// (`Single`/`OptionalSingle`), not hot per-entity loops; use [each] there.
+  (Entity, A)? singleOrNull() {
+    final driver = Query.chooseDriver(_driverCandidates);
+    final driverIsA = identical(driver, _a);
+    _world.beginQuery();
+    try {
+      (Entity, A)? match;
+      for (var i = 0; i < driver.length; i++) {
+        final entityIndex = driver.entityIndexAt(i);
+        final aDense = driverIsA ? i : _a.denseIndexOf(entityIndex);
+        if (aDense < 0) continue;
+        if (!Query.passesFilters(entityIndex, _withStores, _withoutStores)) {
+          continue;
+        }
+        if (match != null) {
+          throw StateError(
+            'Query1<$A>.single: expected exactly one matching entity, found '
+            'more than one.',
+          );
+        }
+        match = (_world.entities.resolve(entityIndex), _a.valueAt(aDense));
+      }
+      return match;
+    } finally {
+      _world.endQuery();
+    }
+  }
+
+  /// Resolves the single matching entity as `(entity, value)`. Throws
+  /// [StateError] when zero or more than one entity matches. See [singleOrNull].
+  (Entity, A) single() {
+    final match = singleOrNull();
+    if (match == null) {
+      throw StateError(
+        'Query1<$A>.single: expected exactly one matching entity, found none.',
+      );
+    }
+    return match;
+  }
+
   /// The number of entities the driver store currently holds. This is an upper
   /// bound on matches, not the exact match count.
   int get driverLength => Query.chooseDriver(_driverCandidates).length;

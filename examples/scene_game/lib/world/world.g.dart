@@ -6,8 +6,8 @@ part of 'world.dart';
 // EcsGenerator
 // **************************************************************************
 
-class _$SetupWorldSystemAdapter implements SystemAdapter, SystemAccessProvider {
-  _$SetupWorldSystemAdapter(this._system);
+class $SetupWorldSystemAdapter implements SystemAdapter, SystemAccessProvider {
+  $SetupWorldSystemAdapter(this._system);
 
   final SetupWorldSystem _system;
   late final Scene _p0;
@@ -27,8 +27,9 @@ class _$SetupWorldSystemAdapter implements SystemAdapter, SystemAccessProvider {
   }
 }
 
-base mixin _$SetupWorldSystem on GameSystem {
-  @override
-  SystemAdapter createAdapter() =>
-      _$SetupWorldSystemAdapter(this as SetupWorldSystem);
-}
+/// Schedulable descriptor for [SetupWorldSystem]. Pass to `app.addSystem` and reference in
+/// `after`/`before`.
+final setupWorldSystem = SystemDescriptor(
+  const SystemRef('package:scene_game/world/world.dart', 'SetupWorldSystem'),
+  () => $SetupWorldSystemAdapter(const SetupWorldSystem()),
+);

@@ -23,6 +23,7 @@ const _gamePluginChecker = TypeChecker.typeNamed(
 );
 
 const _queryTypeNames = {'Query1', 'Query2', 'Query3', 'Query4'};
+const _singleTypeNames = {'Single', 'OptionalSingle'};
 
 /// Aggregating generator for the scene_dash annotations.
 ///
@@ -54,10 +55,24 @@ class EcsGenerator extends Generator {
       }
     }
 
-    for (final element in library.classes) {
-      if (_systemChecker.hasAnnotationOf(element, throwOnUnresolved: false)) {
-        buffer.writeln(_generateSystem(element));
+    final libraryUri = buildStep.inputId.uri.toString();
+
+    // Systems may be `@System` classes or top-level `@System` functions.
+    for (final annotated in library.annotatedWith(_systemChecker)) {
+      final element = annotated.element;
+      if (element is ClassElement) {
+        buffer.writeln(_generateClassSystem(element, libraryUri));
+      } else if (element is ExecutableElement) {
+        buffer.writeln(_generateFunctionSystem(element, libraryUri));
+      } else {
+        throw InvalidGenerationSource(
+          '@System must annotate a class or a top-level function.',
+          element: element,
+        );
       }
+    }
+
+    for (final element in library.classes) {
       if (_bundleChecker.hasAnnotationOf(element, throwOnUnresolved: false)) {
         buffer.writeln(_generateBundle(element));
       }
@@ -77,32 +92,38 @@ class EcsGenerator extends Generator {
 
 // --- System generation ---
 
-String _generateSystem(ClassElement system) {
-  final name = system.name;
-  if (name == null) {
-    throw InvalidGenerationSource('@System class has no name.');
-  }
+/// The injected-parameter wiring shared by class and function systems.
+typedef _SystemWiring = ({
+  String fieldBlock,
+  String ensureBlock,
+  String initBlock,
+  String argList,
+  String readsList,
+  String writesList,
+});
 
-  final run = system.getMethod('run');
-  if (run == null) {
-    throw InvalidGenerationSource(
-      '@System $name must declare a synchronous `run(...)` method.',
-      element: system,
-    );
-  }
+/// Validates that an `@System`'s `run` is synchronous (returns void).
+void _checkSyncRun(ExecutableElement run, String name, Element errorElement) {
   if (run.returnType is! VoidType && !run.returnType.isDartCoreNull) {
-    // Allow void only; async systems return Future and are disallowed.
     final rt = run.returnType.getDisplayString();
     if (rt != 'void') {
       throw InvalidGenerationSource(
-        '@System $name.run must return void (got $rt). Systems must be '
-        'synchronous.',
-        element: system,
+        '@System $name must return void (got $rt). Systems must be synchronous.',
+        element: errorElement,
       );
     }
   }
+}
 
-  final adapter = '_\$${name}Adapter';
+/// Builds the adapter field declarations, store-ensures, init statements,
+/// argument list and access metadata from a system's `run` parameters. Shared by
+/// `@System` classes (where `run` is the `run` method) and top-level `@System`
+/// functions (where `run` is the function itself).
+_SystemWiring _wireRunParams(
+  ExecutableElement run,
+  String name,
+  Element errorElement,
+) {
   final fields = <String>[];
   final ensures = <String>{};
   final inits = <String>[];
@@ -128,6 +149,19 @@ String _generateSystem(ClassElement system) {
         reads: reads,
         writes: writes,
       );
+    } else if (interfaceName != null &&
+        _singleTypeNames.contains(interfaceName)) {
+      _emitSingleParam(
+        param: param,
+        type: type as InterfaceType,
+        wrapper: interfaceName,
+        field: field,
+        fields: fields,
+        ensures: ensures,
+        inits: inits,
+        reads: reads,
+        writes: writes,
+      );
     } else if (_resourceChecker.hasAnnotationOf(param,
         throwOnUnresolved: false)) {
       fields.add('late final $typeStr $field;');
@@ -145,10 +179,10 @@ String _generateSystem(ClassElement system) {
       inits.add('$field = world.eventChannel<$eventType>().$factory();');
     } else {
       throw InvalidGenerationSource(
-        'Unsupported parameter `${param.name} : $typeStr` in $name.run. '
-        'Expected a Query1..Query4, an @Resource(), Commands, EventReader or '
-        'EventWriter.',
-        element: system,
+        'Unsupported parameter `${param.name} : $typeStr` in $name. '
+        'Expected a Query1..Query4, Single/OptionalSingle, an @Resource(), '
+        'Commands, EventReader or EventWriter.',
+        element: errorElement,
       );
     }
 
@@ -156,44 +190,131 @@ String _generateSystem(ClassElement system) {
     index++;
   }
 
-  final fieldBlock = fields.map((f) => '  $f').join('\n');
-  final ensureBlock = ensures.map((e) => '    $e').join('\n');
-  final initBlock = inits.map((i) => '    $i').join('\n');
-  final argList = args.join(', ');
   // Reads are queried components that are not declared as writes.
   reads.removeAll(writes);
-  final readsList = reads.join(', ');
-  final writesList = writes.join(', ');
+
+  return (
+    fieldBlock: fields.map((f) => '  $f').join('\n'),
+    ensureBlock: ensures.map((e) => '    $e').join('\n'),
+    initBlock: inits.map((i) => '    $i').join('\n'),
+    argList: args.join(', '),
+    readsList: reads.join(', '),
+    writesList: writes.join(', '),
+  );
+}
+
+/// Lower-cases the first character.
+String _lowerFirst(String s) =>
+    s.isEmpty ? s : s[0].toLowerCase() + s.substring(1);
+
+/// Upper-cases the first character.
+String _upperFirst(String s) =>
+    s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+/// The generated top-level descriptor name for a system, e.g.
+/// `MovePlayerSystem` -> `movePlayerSystem`, `evaluateGameRules` ->
+/// `evaluateGameRulesSystem`.
+String _descriptorName(String name) {
+  final lower = _lowerFirst(name);
+  return lower.endsWith('System') ? lower : '${lower}System';
+}
+
+/// Generates the adapter + descriptor for an `@System` class. The adapter wraps
+/// a `const` instance of the system and calls its `run`.
+String _generateClassSystem(ClassElement system, String libraryUri) {
+  final name = system.name;
+  if (name == null) {
+    throw InvalidGenerationSource('@System class has no name.');
+  }
+  final run = system.getMethod('run');
+  if (run == null) {
+    throw InvalidGenerationSource(
+      '@System $name must declare a synchronous `run(...)` method.',
+      element: system,
+    );
+  }
+  _checkSyncRun(run, '$name.run', system);
+
+  final w = _wireRunParams(run, '$name.run', system);
+  final adapter = '\$${name}Adapter';
+  final descriptor = _descriptorName(name);
 
   return '''
 class $adapter implements SystemAdapter, SystemAccessProvider {
   $adapter(this._system);
 
   final $name _system;
-$fieldBlock
+${w.fieldBlock}
 
   @override
   void initialize(World world) {
-$ensureBlock
-$initBlock
+${w.ensureBlock}
+${w.initBlock}
   }
 
   @override
   SystemAccess get access => const SystemAccess(
-        reads: <Type>{$readsList},
-        writes: <Type>{$writesList},
+        reads: <Type>{${w.readsList}},
+        writes: <Type>{${w.writesList}},
       );
 
   @override
   void run() {
-    _system.run($argList);
+    _system.run(${w.argList});
   }
 }
 
-base mixin _\$$name on GameSystem {
-  @override
-  SystemAdapter createAdapter() => $adapter(this as $name);
+/// Schedulable descriptor for [$name]. Pass to `app.addSystem` and reference in
+/// `after`/`before`.
+final $descriptor = SystemDescriptor(
+  const SystemRef('$libraryUri', '$name'),
+  () => $adapter(const $name()),
+);
+''';
 }
+
+/// Generates the adapter + descriptor for a top-level `@System` function. The
+/// adapter injects parameters and calls the function directly — no class, no
+/// mixin, no constructor ceremony.
+String _generateFunctionSystem(ExecutableElement fn, String libraryUri) {
+  final name = fn.name;
+  if (name == null || name.isEmpty) {
+    throw InvalidGenerationSource('@System function has no name.');
+  }
+  _checkSyncRun(fn, '$name(...)', fn);
+
+  final w = _wireRunParams(fn, '$name(...)', fn);
+  final adapter = '\$${_upperFirst(name)}Adapter';
+  final descriptor = _descriptorName(name);
+
+  return '''
+class $adapter implements SystemAdapter, SystemAccessProvider {
+${w.fieldBlock}
+
+  @override
+  void initialize(World world) {
+${w.ensureBlock}
+${w.initBlock}
+  }
+
+  @override
+  SystemAccess get access => const SystemAccess(
+        reads: <Type>{${w.readsList}},
+        writes: <Type>{${w.writesList}},
+      );
+
+  @override
+  void run() {
+    $name(${w.argList});
+  }
+}
+
+/// Schedulable descriptor for [$name]. Pass to `app.addSystem` and reference in
+/// `after`/`before`.
+final $descriptor = SystemDescriptor(
+  const SystemRef('$libraryUri', '$name'),
+  () => $adapter(),
+);
 ''';
 }
 
@@ -244,6 +365,55 @@ void _emitQueryParam({
     '$field = world.query$arity<$typeArgs>('
     'withTypes: const <Type>[$withList], '
     'withoutTypes: const <Type>[$withoutList]);',
+  );
+}
+
+/// Emits a `Single<A>` / `OptionalSingle<A>` parameter: a one-component query
+/// (with the same `@Query` filters) wrapped so the system resolves the single
+/// matching entity. [wrapper] is `Single` or `OptionalSingle`.
+void _emitSingleParam({
+  required FormalParameterElement param,
+  required InterfaceType type,
+  required String wrapper,
+  required String field,
+  required List<String> fields,
+  required Set<String> ensures,
+  required List<String> inits,
+  required Set<String> reads,
+  required Set<String> writes,
+}) {
+  final wrapperType = type.getDisplayString();
+  final component = type.typeArguments.first;
+  final componentStr = component.getDisplayString();
+
+  final queryAnno = _queryChecker.firstAnnotationOf(
+    param,
+    throwOnUnresolved: false,
+  );
+  final reader = queryAnno == null ? null : ConstantReader(queryAnno);
+  final requires = _typeList(reader, 'requires');
+  final excludes = _typeList(reader, 'excludes');
+  final writeTypes =
+      _typeList(reader, 'writes').map((t) => t.getDisplayString()).toSet();
+
+  ensures.add(ensureStoreCall(component, forQuery: true));
+  if (writeTypes.contains(componentStr)) {
+    writes.add(componentStr);
+  } else {
+    reads.add(componentStr);
+  }
+  for (final filter in [...requires, ...excludes]) {
+    ensures.add(ensureStoreCall(filter, forQuery: false));
+  }
+
+  final withList = requires.map((t) => t.getDisplayString()).join(', ');
+  final withoutList = excludes.map((t) => t.getDisplayString()).join(', ');
+
+  fields.add('late final $wrapperType $field;');
+  inits.add(
+    '$field = $wrapper<$componentStr>(world.query1<$componentStr>('
+    'withTypes: const <Type>[$withList], '
+    'withoutTypes: const <Type>[$withoutList]));',
   );
 }
 

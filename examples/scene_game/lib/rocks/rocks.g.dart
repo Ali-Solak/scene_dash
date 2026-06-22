@@ -6,18 +6,8 @@ part of 'rocks.dart';
 // EcsGenerator
 // **************************************************************************
 
-mixin _$RockBundle implements SceneDashBundle {
-  @override
-  void insertInto(World world, Entity entity) {
-    final self = this as RockBundle;
-    world.ensureTagStore<Rock>().add(entity.index);
-    world.ensureObjectStore<SceneNodeRef>().insert(entity.index, self.node);
-    world.ensureTagStore<PhysicsDriven>().add(entity.index);
-  }
-}
-
-class _$SpawnRocksSystemAdapter implements SystemAdapter, SystemAccessProvider {
-  _$SpawnRocksSystemAdapter(this._system);
+class $SpawnRocksSystemAdapter implements SystemAdapter, SystemAccessProvider {
+  $SpawnRocksSystemAdapter(this._system);
 
   final SpawnRocksSystem _system;
   late final Commands _p0;
@@ -43,15 +33,16 @@ class _$SpawnRocksSystemAdapter implements SystemAdapter, SystemAccessProvider {
   }
 }
 
-base mixin _$SpawnRocksSystem on GameSystem {
-  @override
-  SystemAdapter createAdapter() =>
-      _$SpawnRocksSystemAdapter(this as SpawnRocksSystem);
-}
+/// Schedulable descriptor for [SpawnRocksSystem]. Pass to `app.addSystem` and reference in
+/// `after`/`before`.
+final spawnRocksSystem = SystemDescriptor(
+  const SystemRef('package:scene_game/rocks/rocks.dart', 'SpawnRocksSystem'),
+  () => $SpawnRocksSystemAdapter(const SpawnRocksSystem()),
+);
 
-class _$CleanupRocksSystemAdapter
+class $CleanupRocksSystemAdapter
     implements SystemAdapter, SystemAccessProvider {
-  _$CleanupRocksSystemAdapter(this._system);
+  $CleanupRocksSystemAdapter(this._system);
 
   final CleanupRocksSystem _system;
   late final Query1<SceneNodeRef> _p0;
@@ -78,8 +69,19 @@ class _$CleanupRocksSystemAdapter
   }
 }
 
-base mixin _$CleanupRocksSystem on GameSystem {
+/// Schedulable descriptor for [CleanupRocksSystem]. Pass to `app.addSystem` and reference in
+/// `after`/`before`.
+final cleanupRocksSystem = SystemDescriptor(
+  const SystemRef('package:scene_game/rocks/rocks.dart', 'CleanupRocksSystem'),
+  () => $CleanupRocksSystemAdapter(const CleanupRocksSystem()),
+);
+
+mixin _$RockBundle implements SceneDashBundle {
   @override
-  SystemAdapter createAdapter() =>
-      _$CleanupRocksSystemAdapter(this as CleanupRocksSystem);
+  void insertInto(World world, Entity entity) {
+    final self = this as RockBundle;
+    world.ensureTagStore<Rock>().add(entity.index);
+    world.ensureObjectStore<SceneNodeRef>().insert(entity.index, self.node);
+    world.ensureTagStore<PhysicsDriven>().add(entity.index);
+  }
 }

@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import '../schedule/schedule_label.dart';
+import '../schedule/system_descriptor.dart';
 import '../schedule/system_label.dart';
-import '../system/game_system.dart';
 import '../system/system_adapter.dart';
 import 'plugin.dart';
 
@@ -12,16 +12,17 @@ import 'plugin.dart';
 /// insert resources and pull in dependency plugins. It deliberately does *not*
 /// expose frame execution — that belongs to the app/scene driver.
 abstract interface class AppBuilder {
-  /// Registers a `@System` [system] into [schedule] under [label], optionally
-  /// constrained to run `after`/`before` other labels.
+  /// Registers a `@System` [descriptor] into [schedule], optionally constrained
+  /// to run `after`/`before` other systems (referenced by their descriptors).
   ///
-  /// The system's generated adapter is obtained via [GameSystem.createAdapter].
+  /// [descriptor] is the generated `SystemDescriptor` for a `@System` class or
+  /// function (e.g. `movePlayerSystem`); its identity and adapter come from the
+  /// generator, so there is no hand-written label and no `with _$…` mixin.
   AppBuilder addSystem(
-    GameSystem system, {
+    SystemDescriptor descriptor, {
     required ScheduleLabel schedule,
-    required SystemLabel label,
-    List<SystemLabel> after,
-    List<SystemLabel> before,
+    List<SystemDescriptor> after,
+    List<SystemDescriptor> before,
   });
 
   /// Registers a system [adapter] directly. Used by hand-written adapters
@@ -37,8 +38,18 @@ abstract interface class AppBuilder {
   /// Declares an event channel for event type [T] (idempotent).
   AppBuilder addEvent<T>();
 
-  /// Inserts (or replaces) the resource instance for type [T].
+  /// Inserts the resource instance for type [T].
+  ///
+  /// Throws [StateError] if a resource of type [T] is already present: each
+  /// resource should be owned by exactly one place (the plugin that uses it, or
+  /// a single insertion through the game for an externally-constructed
+  /// dependency). Use [replaceResource] when swapping is intentional, so an
+  /// accidental double-registration fails loudly instead of silently winning.
   AppBuilder insertResource<T extends Object>(T resource);
+
+  /// Replaces (or inserts) the resource instance for type [T]. Use this when
+  /// intentionally swapping a resource; [insertResource] rejects duplicates.
+  AppBuilder replaceResource<T extends Object>(T resource);
 
   /// Registers cleanup to run once when the app shuts down.
   AppBuilder addCleanup(FutureOr<void> Function() cleanup);

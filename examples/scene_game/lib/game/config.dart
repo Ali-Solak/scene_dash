@@ -2,6 +2,8 @@
 /// gameplay feel can be adjusted without hunting through systems.
 library;
 
+import 'dart:math' as math;
+
 // --- Ramp (a wide, finite inclined platform) ---
 
 /// Ramp size along X (width), Y (thickness) and Z (length), in world units.
@@ -13,6 +15,17 @@ const double rampLength = 36;
 /// rocks spawned at the -Z (high) end roll toward +Z.
 const double rampInclineRadians = 0.18;
 
+double rampSurfaceYAtZ(double z) {
+  return rampThickness * 0.5 * math.cos(rampInclineRadians) -
+      z * math.sin(rampInclineRadians);
+}
+
+double playerGroundYAtZ(double z) => rampSurfaceYAtZ(z) + playerRadius + 0.04;
+
+bool isOverRampFootprint(double x, double z) {
+  return x.abs() <= rampWidth * 0.5 && z.abs() <= rampLength * 0.5;
+}
+
 // --- Rocks (dynamic spheres that roll down) ---
 
 const double rockRadius = 0.7;
@@ -23,7 +36,16 @@ const double rockSpawnY = 9;
 const double rockSpawnHalfWidth = 6;
 
 /// Seconds between rock spawns.
-const double rockSpawnInterval = 0.55;
+const double rockSpawnInterval = 0.48;
+
+/// Chance that a spawned rock is the faster flaming variant.
+const double flamingRockChance = 0.25;
+
+/// Extra downhill launch speed for flaming rocks, along the ramp's +Z descent.
+const double flamingRockForwardVelocity = 15;
+
+/// Initial tumble speed that makes flaming rocks read as more dangerous.
+const double flamingRockSpinVelocity = 8;
 
 /// Rocks that fall below this Y are despawned (off the platform, into the void).
 const double rockKillY = -25;
@@ -32,14 +54,10 @@ const double rockKillY = -25;
 
 const double playerRadius = 0.6;
 const double playerStartZ = 6;
-const double playerStartY = 2;
+final double playerStartY = playerGroundYAtZ(playerStartZ);
 
 /// Sideways dodge speed across the ramp (X), in m/s.
 const double playerStrafeSpeed = 8;
-
-/// Constant downward bias applied each step so the controller hugs the slope
-/// and actually falls when it walks off an edge, in m/s.
-const double playerStickSpeed = 14;
 
 // --- Lose conditions ---
 

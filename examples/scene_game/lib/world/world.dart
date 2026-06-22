@@ -35,27 +35,36 @@ final class SetupWorldSystem extends GameSystem {
       ..environment = EnvironmentMap.studio()
       ..directionalLight = DirectionalLight(
         direction: Vector3(-0.45, -1.0, -0.35),
-        color: Vector3(1.0, 0.96, 0.88),
-        intensity: 4,
+        color: Vector3(1.0, 0.94, 0.84),
+        intensity: 4.4,
         castsShadow: true,
       )
-      ..exposure = 1.1;
-    scene.postProcess.bloom
+      ..toneMapping = ToneMappingMode.aces
+      ..exposure = 1.06;
+    scene.postProcess.colorGrading
       ..enabled = true
-      ..threshold = 1.1
-      ..intensity = 0.35;
+      ..contrast = 1.04
+      ..saturation = 1.05
+      ..temperature = 0.08;
+    scene.postProcess.bloom
+      ..enabled = false
+      ..threshold = 1.55
+      ..intensity = 0.12
+      ..scatter = 0.45;
     scene.postProcess.vignette
       ..enabled = true
-      ..intensity = 0.3;
+      ..intensity = 0.24
+      ..radius = 0.82
+      ..smoothness = 0.62;
 
     final ramp =
         Node(
             mesh: Mesh(
               CuboidGeometry(Vector3(rampWidth, rampThickness, rampLength)),
               PhysicallyBasedMaterial()
-                ..baseColorFactor = Vector4(0.30, 0.33, 0.38, 1)
-                ..metallicFactor = 0
-                ..roughnessFactor = 0.85,
+                ..baseColorFactor = Vector4(0.24, 0.27, 0.32, 1)
+                ..metallicFactor = 0.22
+                ..roughnessFactor = 0.36,
             ),
             localTransform: Matrix4.rotationX(rampInclineRadians),
           )
@@ -80,8 +89,9 @@ final class SetupWorldSystem extends GameSystem {
   void _addLaneStripes(Node ramp) {
     final stripe = PhysicallyBasedMaterial()
       ..baseColorFactor = Vector4(0.9, 0.85, 0.5, 1)
-      ..roughnessFactor = 0.6
-      ..emissiveFactor = Vector4(0.25, 0.22, 0.08, 1);
+      ..metallicFactor = 0.08
+      ..roughnessFactor = 0.24
+      ..emissiveFactor = Vector4(0.28, 0.22, 0.07, 1);
     const count = 7;
     final geometry = CuboidGeometry(Vector3(rampWidth * 0.94, 0.06, 0.35));
     for (var i = 1; i < count; i++) {

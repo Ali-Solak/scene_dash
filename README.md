@@ -72,21 +72,13 @@ final class CubeOrbitPlugin extends Plugin {
   @override
   void build(AppBuilder app) {
     app
-      ..addSystem(
-        const SpawnCubeSystem(),
-        schedule: Schedules.startup,
-        label: const SystemLabel('demo.spawn'),
-      )
-      ..addSystem(
-        const OrbitSystem(),
-        schedule: Schedules.update,
-        label: const SystemLabel('demo.orbit'),
-      );
+      ..addSystem(spawnCubeSystem, schedule: Schedules.startup)
+      ..addSystem(orbitSystem, schedule: Schedules.update);
   }
 }
 
 @System()
-final class SpawnCubeSystem extends GameSystem with _$SpawnCubeSystem {
+final class SpawnCubeSystem extends GameSystem {
   const SpawnCubeSystem();
 
   void run(Commands commands) {
@@ -95,7 +87,7 @@ final class SpawnCubeSystem extends GameSystem with _$SpawnCubeSystem {
 }
 
 @System()
-final class OrbitSystem extends GameSystem with _$OrbitSystem {
+final class OrbitSystem extends GameSystem {
   const OrbitSystem();
 
   void run(
@@ -132,15 +124,16 @@ final class CubeBundle with _$CubeBundle {
 }
 ```
 
-Run `build_runner` to generate the system and bundle adapters:
+Run `build_runner` to generate the system descriptors and bundle adapters:
 
 ```bash
 dart run build_runner build
 ```
 
-That is the whole loop: `Game` drives schedules from `SceneView`, startup spawns
-an entity with a `SceneTransform` and `SceneNodeRef`, and the integration mounts
-the node and syncs the transform to `flutter_scene`.
+That is the whole loop: `Game` drives schedules from `SceneView`, plugins add
+generated system descriptors like `spawnCubeSystem`, startup spawns an entity
+with a `SceneTransform` and `SceneNodeRef`, and the integration mounts the node
+and syncs the transform to `flutter_scene`.
 
 The same ECS core also works without Flutter for headless tests and simulations:
 
@@ -162,10 +155,10 @@ dart analyze packages/scene_dash
 flutter analyze packages/scene_dash_flutter_scene
 ```
 
-Generated systems and bundles use `build_runner`:
+Generated systems, plugin dependency metadata, and bundles use `build_runner`:
 
 ```bash
-cd examples/minimal_game
+cd examples/headless_example
 dart run build_runner build
 dart test
 ```
@@ -209,7 +202,7 @@ snapshots, proxy objects, or component reconstruction steps.
 
 ```dart
 @System()
-final class AccelerateSystem extends GameSystem with _$AccelerateSystem {
+final class AccelerateSystem extends GameSystem {
   const AccelerateSystem();
 
   void run(
@@ -239,7 +232,7 @@ final class Player {
 }
 
 @System()
-final class MovePlayersSystem extends GameSystem with _$MovePlayersSystem {
+final class MovePlayersSystem extends GameSystem {
   const MovePlayersSystem();
 
   void run(
@@ -284,7 +277,7 @@ final class PlayerBundle with _$PlayerBundle {
 }
 
 @System()
-final class SpawnPlayerSystem extends GameSystem with _$SpawnPlayerSystem {
+final class SpawnPlayerSystem extends GameSystem {
   const SpawnPlayerSystem();
 
   void run(Commands commands) {
@@ -332,7 +325,7 @@ final class InputState {
 }
 
 @System()
-final class ReadInputSystem extends GameSystem with _$ReadInputSystem {
+final class ReadInputSystem extends GameSystem {
   const ReadInputSystem();
 
   void run(@Resource() InputState input) {
@@ -372,7 +365,7 @@ final class PlayerSpawned {
 }
 
 @System()
-final class SpawnSystem extends GameSystem with _$SpawnSystem {
+final class SpawnSystem extends GameSystem {
   const SpawnSystem();
 
   void run(Commands commands, EventWriter<PlayerSpawned> spawned) {
@@ -385,7 +378,7 @@ final class SpawnSystem extends GameSystem with _$SpawnSystem {
 }
 
 @System()
-final class SpawnLogSystem extends GameSystem with _$SpawnLogSystem {
+final class SpawnLogSystem extends GameSystem {
   const SpawnLogSystem();
 
   void run(EventReader<PlayerSpawned> spawned) {
@@ -429,16 +422,8 @@ final class PlayerPlugin extends Plugin with _$PlayerPlugin {
   void build(AppBuilder app) {
     app
       ..addEvent<PlayerSpawned>()
-      ..addSystem(
-        const SpawnSystem(),
-        schedule: Schedules.startup,
-        label: const SystemLabel('player.spawn'),
-      )
-      ..addSystem(
-        const MovePlayersSystem(),
-        schedule: Schedules.update,
-        label: const SystemLabel('player.move'),
-      );
+      ..addSystem(spawnSystem, schedule: Schedules.startup)
+      ..addSystem(movePlayersSystem, schedule: Schedules.update);
   }
 }
 ```
@@ -488,7 +473,7 @@ final class CubeBundle with _$CubeBundle {
 }
 
 @System()
-final class OrbitNodesSystem extends GameSystem with _$OrbitNodesSystem {
+final class OrbitNodesSystem extends GameSystem {
   const OrbitNodesSystem();
 
   void run(
@@ -547,7 +532,7 @@ Use `SceneCommands` for deferred scene-graph mutations from systems.
 
 ```dart
 @System()
-final class AddDecorationSystem extends GameSystem with _$AddDecorationSystem {
+final class AddDecorationSystem extends GameSystem {
   const AddDecorationSystem();
 
   void run(@Resource() SceneCommands sceneCommands) {
@@ -575,8 +560,7 @@ The plugin inserts the `PhysicsWorld` as a resource and republishes raw
 
 ```dart
 @System()
-final class ReadCollisionsSystem extends GameSystem
-    with _$ReadCollisionsSystem {
+final class ReadCollisionsSystem extends GameSystem {
   const ReadCollisionsSystem();
 
   void run(EventReader<CollisionEvent> collisions) {
@@ -648,12 +632,18 @@ objects in place.
 
 ### Code Generation Without Runtime Reflection
 
-`source_gen` provides typed injection, validated bundles, plugin metadata,
-access metadata, event/channel setup, and specialized adapters while the runtime
-stays explicit and reflection-free.
+`source_gen` provides typed injection, generated `SystemDescriptor`s, validated
+bundles, plugin metadata, access metadata, event/channel setup, and specialized
+adapters while the runtime stays explicit and reflection-free.
 
 That gives much of Bevy's authoring ergonomics without pretending Dart has
 Rust's monomorphization or memory model.
+
+System classes do not use generated mixins. The generator emits a top-level
+descriptor, such as `movePlayerSystem`, and game code passes that descriptor to
+`app.addSystem(...)`. Bundles still mix in their generated insert adapter, and
+plugins only need a generated mixin when they declare `@GamePlugin(requires:
+[...])`.
 
 ### Cache Everything Stable
 
@@ -711,9 +701,8 @@ simulation.
 | [`packages/scene_dash`](packages/scene_dash) | Pure-Dart ECS runtime, annotations, commands, resources, events, schedules, queries. |
 | [`packages/scene_dash_generator`](packages/scene_dash_generator) | `source_gen` / `build_runner` adapters for systems, bundles, and plugin metadata. |
 | [`packages/scene_dash_flutter_scene`](packages/scene_dash_flutter_scene) | `Game`, `SceneNodeRef`, `SceneCommands`, `SceneTransform`, `PhysicsPlugin`, and the scene frame integration. |
-| [`examples/minimal_game`](examples/minimal_game) | Headless generated ECS example. |
+| [`examples/headless_example`](examples/headless_example) | Headless generated ECS example. |
 | [`examples/scene_game`](examples/scene_game) | Small `flutter_scene` app driven by Scene-Dash. |
-| [`examples/scene_benchmark`](examples/scene_benchmark) | On-device scene integration timing harness. |
 | [`benchmarks`](benchmarks) | Pure-Dart query and structural benchmarks. |
 
 Deep design notes live in [`docs/concept.md`](docs/concept.md), and the package

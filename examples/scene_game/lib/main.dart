@@ -6,9 +6,9 @@ import 'package:scene_dash_flutter_scene/scene_dash_flutter_scene.dart';
 import 'package:vector_math/vector_math.dart' show Vector3;
 
 import 'game/camera.dart';
+import 'game/camera_rig.dart';
 import 'game/config.dart';
 import 'game/game_state.dart';
-import 'game/view_state.dart';
 import 'hud/game_hud.dart';
 import 'player/player.dart';
 import 'rocks/rocks.dart';

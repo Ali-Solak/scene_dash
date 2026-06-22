@@ -1,6 +1,6 @@
 import 'package:flutter_scene/scene.dart';
 
-import 'view_state.dart';
+import 'camera_rig.dart';
 
 /// A chase camera driven by ECS-updated [CameraRig] state.
 Camera buildGameCamera(Duration elapsed, CameraRig rig) {

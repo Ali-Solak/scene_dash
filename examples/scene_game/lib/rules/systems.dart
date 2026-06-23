@@ -7,9 +7,15 @@ part of 'rules.dart';
 /// Fell off: a downward raycast finds no fixed platform within
 /// [groundProbeDistance]. Hit by a rock: any rock is within the combined radii
 /// of the player.
+///
+/// On a hit it switches the player's native rigid body (reached through
+/// `SceneNodeRef`) to kinematic, so the query declares `writes: [SceneNodeRef]`:
+/// mutating an object reached through a component reference counts as writing
+/// that component for scheduler diagnostics.
 @System()
 void evaluateGameRules(
-  @Query(requires: [Player]) Single<SceneNodeRef> player,
+  @Query(requires: [Player], writes: [SceneNodeRef])
+  Single<SceneNodeRef> player,
   @Resource() PhysicsWorld world,
   @Resource() GameState game,
   @Resource() FrameTime time,
@@ -79,12 +85,18 @@ void _startImpact(
 }
 
 /// Keeps camera state current and runs the visible post-hit tumble.
+///
+/// During the tumble it overwrites the player node's local transform (reached
+/// through `SceneNodeRef`), so the query declares `writes: [SceneNodeRef]`. It
+/// runs `after: [evaluateGameRulesSystem]` (see [RulesPlugin]) because that
+/// system activates the [ImpactMotion] this one reads in the same `update` phase.
 @System()
 final class PlayerViewSystem extends GameSystem {
   const PlayerViewSystem();
 
   void run(
-    @Query(requires: [Player]) Single<SceneNodeRef> player,
+    @Query(requires: [Player], writes: [SceneNodeRef])
+    Single<SceneNodeRef> player,
     @Resource() CameraRig camera,
     @Resource() ImpactMotion impact,
     @Resource() FrameTime time,
@@ -109,7 +121,8 @@ final class RestartSystem extends GameSystem {
   const RestartSystem();
 
   void run(
-    @Query(requires: [Player]) Query1<SceneNodeRef> players,
+    @Query(requires: [Player], writes: [SceneNodeRef])
+    Single<SceneNodeRef> player,
     @Query(requires: [Rock]) Query1<SceneNodeRef> rocks,
     @Resource() InputState input,
     @Resource() GameState game,
@@ -123,18 +136,19 @@ final class RestartSystem extends GameSystem {
     if (game.status != GameStatus.lost) return;
 
     rocks.each((entity, binding) => commands.despawn(entity));
-    players.each((entity, binding) {
-      final body = binding.node.getComponent<RapierRigidBody>();
-      if (body != null) {
-        body
-          ..type = BodyType.kinematic
-          ..linearVelocity = Vector3.zero()
-          ..angularVelocity = Vector3.zero();
-      }
-      binding.node.localTransform = Matrix4.translation(
-        Vector3(0, playerStartY, playerStartZ),
-      );
-    });
+    // Restoring the player resets its native body and transform (reached
+    // through SceneNodeRef), hence `writes: [SceneNodeRef]` above.
+    final node = player.value.node;
+    final body = node.getComponent<RapierRigidBody>();
+    if (body != null) {
+      body
+        ..type = BodyType.kinematic
+        ..linearVelocity = Vector3.zero()
+        ..angularVelocity = Vector3.zero();
+    }
+    node.localTransform = Matrix4.translation(
+      Vector3(0, playerStartY, playerStartZ),
+    );
     camera.reset();
     impact.reset();
     spawner.reset();

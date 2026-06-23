@@ -1,3 +1,4 @@
+import '../diagnostics/system_profiler.dart';
 import '../world/world.dart';
 import 'access_conflict.dart';
 import 'schedule_graph.dart';
@@ -59,13 +60,30 @@ final class Schedule {
   }
 
   /// Runs every system in compiled order. Must be compiled first.
-  void run() {
+  ///
+  /// When [profiler] is non-null, each system is timed with the profiler's reused
+  /// stopwatch and recorded under this schedule's label. The null-profiler path
+  /// is the unchanged tight loop, so profiling adds nothing when disabled.
+  void run([SystemProfiler? profiler]) {
     final compiled = _compiled;
     if (compiled == null) {
       throw StateError('Schedule "${label.id}" has not been compiled.');
     }
+    if (profiler == null) {
+      for (var i = 0; i < compiled.length; i++) {
+        compiled[i].adapter.run();
+      }
+      return;
+    }
+    final stopwatch = profiler.stopwatch;
     for (var i = 0; i < compiled.length; i++) {
-      compiled[i].adapter.run();
+      final registration = compiled[i];
+      stopwatch
+        ..reset()
+        ..start();
+      registration.adapter.run();
+      stopwatch.stop();
+      profiler.record(registration.label, label, stopwatch.elapsedMicroseconds);
     }
   }
 }

@@ -17,7 +17,8 @@ void spawnMotes(@Resource() Scene scene, @Resource() MoteField field) {
   for (var i = 0; i < _moteCount; i++) {
     field.base[i * 3] = (random.nextDouble() * 2 - 1) * rampWidth * 0.5;
     field.base[i * 3 + 1] = 4 + random.nextDouble() * 5;
-    field.base[i * 3 + 2] = -rampLength * 0.5 + random.nextDouble() * rampLength;
+    field.base[i * 3 + 2] =
+        -rampLength * 0.5 + random.nextDouble() * rampLength;
     field.phase[i] = random.nextDouble() * math.pi * 2;
     field.speed[i] = 0.6 + random.nextDouble() * 0.8;
   }

@@ -92,6 +92,7 @@ final class SetupWorldSystem extends GameSystem {
                   rampLength / 2,
                 ),
               ),
+              collisionLayer: PhysicsLayers.platform,
             ),
           );
 

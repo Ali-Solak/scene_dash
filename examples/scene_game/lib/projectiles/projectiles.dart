@@ -29,7 +29,13 @@ final class ProjectilesPlugin extends Plugin {
     app
       ..insertResource<Blaster>(Blaster())
       ..insertResource<ImpactVfx>(ImpactVfx())
-      ..addSystem(shootProjectilesSystem, schedule: Schedules.fixedPrePhysics)
+      // Shooting reads the player position after movePlayer has moved it this
+      // fixed step, so order it explicitly behind that system.
+      ..addSystem(
+        shootProjectilesSystem,
+        schedule: Schedules.fixedPrePhysics,
+        after: [movePlayerSystem],
+      )
       ..addSystem(spawnImpactVfxSystem, schedule: Schedules.startup)
       ..addSystem(updateProjectilesSystem, schedule: Schedules.update)
       ..addSystem(updateImpactVfxSystem, schedule: Schedules.update);

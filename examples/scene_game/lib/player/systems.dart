@@ -9,26 +9,30 @@ void spawnPlayer(Commands commands) {
 }
 
 /// Fixed step: translate input into a move-and-slide request.
+///
+/// Drives the player through its native character controller and snaps it to the
+/// ramp (both reached through `SceneNodeRef`), so the query declares
+/// `writes: [SceneNodeRef]`: mutating an object reached through a component
+/// reference counts as writing that component for scheduler diagnostics.
 @System()
 void movePlayer(
-  @Query(requires: [Player]) Query1<SceneNodeRef> players,
+  @Query(requires: [Player], writes: [SceneNodeRef])
+  Single<SceneNodeRef> player,
   @Resource() InputState input,
   @Resource() GameState game,
   @Resource() FixedTime time,
 ) {
   if (game.status != GameStatus.playing) return;
-  players.each((entity, binding) {
-    final node = binding.node;
-    // The integration mounts the player under the RapierWorld before the first
-    // step, so the node is already in the scene here.
-    final controller = node.getComponent<RapierKinematicCharacterController>();
-    if (controller == null) return;
+  // The integration mounts the player under the RapierWorld before the first
+  // step, so the node is already in the scene here.
+  final node = player.value.node;
+  final controller = node.getComponent<RapierKinematicCharacterController>();
+  if (controller == null) return;
 
-    _snapToRamp(node);
+  _snapToRamp(node);
 
-    final dt = time.delta;
-    controller.move(Vector3(input.horizontal * playerStrafeSpeed * dt, 0, 0));
-  });
+  final dt = time.delta;
+  controller.move(Vector3(input.horizontal * playerStrafeSpeed * dt, 0, 0));
 }
 
 void _snapToRamp(Node node) {

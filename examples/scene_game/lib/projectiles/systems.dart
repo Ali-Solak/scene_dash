@@ -6,7 +6,8 @@ final class ShootProjectilesSystem extends GameSystem {
 
   void run(
     Commands commands,
-    @Query(requires: [Player]) Query1<SceneNodeRef> players,
+    // Reads the player position only (no node mutation), so no `writes:` here.
+    @Query(requires: [Player]) Single<SceneNodeRef> player,
     @Resource() InputState input,
     @Resource() GameState game,
     @Resource() Blaster blaster,
@@ -24,10 +25,8 @@ final class ShootProjectilesSystem extends GameSystem {
     input.shootRequested = false;
 
     if (!blaster.consumeShot(time.delta)) return;
-    final player = players.singleOrNull();
-    if (player == null) return;
 
-    final position = player.$2.node.globalTransform.getTranslation()
+    final position = player.value.node.globalTransform.getTranslation()
       ..y += playerRadius * 0.45
       ..z -= playerRadius + projectileRadius + 0.08;
     commands.spawn(ProjectileBundle(position: position));

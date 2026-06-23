@@ -139,10 +139,12 @@ const double gravityStrength = 18;
 
 /// Collision-group membership bits for the demo's physics bodies.
 ///
-/// Used to classify physics-query results without rebuilding ECS-to-node lookup
-/// sets each frame: e.g. the lose-condition system reads `overlapSphere` hits and
-/// keeps only colliders whose [rock] bit is set. (Bits also feed Rapier's
-/// collision groups; the demo keeps collision *masks* permissive so contacts are
+/// Every body is tagged with its layer ([player] on the player collider,
+/// [platform] on the ramp, [rock] on each rock), so physics-query results can be
+/// classified by collider layer without rebuilding ECS-to-node lookup sets each
+/// frame: e.g. the lose-condition system reads `overlapSphere` hits and keeps
+/// only colliders whose [rock] bit is set. (Bits also feed Rapier's collision
+/// groups; the demo keeps collision *masks* permissive so contacts are
 /// unchanged.)
 abstract final class PhysicsLayers {
   static const int player = 1 << 0;

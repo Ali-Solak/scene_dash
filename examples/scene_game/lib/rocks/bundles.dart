@@ -23,13 +23,17 @@ final class RockBundle with _$RockBundle {
     ..metallicFactor = 0.18
     ..roughnessFactor = 0.26;
 
+  // All rocks share one sphere geometry (only the material differs by variant),
+  // so build it once instead of per spawn — rocks are the highest-churn entity.
+  static final _geometry = SphereGeometry(radius: rockRadius);
+
   static Node _makeNode(double x, bool flaming) {
     final node = Node(
-      mesh: Mesh(SphereGeometry(radius: rockRadius), _material),
+      mesh: Mesh(_geometry, _material),
       localTransform: Matrix4.translation(Vector3(x, rockSpawnY, rockSpawnZ)),
     );
     if (flaming) {
-      node.mesh = Mesh(SphereGeometry(radius: rockRadius), _flamingMaterial);
+      node.mesh = Mesh(_geometry, _flamingMaterial);
       // The flame trail is an ECS component + shared instanced pool (see
       // systems.dart), inserted on the entity by SpawnRocksSystem — not a
       // per-rock flutter_scene component here.

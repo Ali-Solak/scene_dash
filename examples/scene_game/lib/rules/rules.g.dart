@@ -32,7 +32,7 @@ class $PlayerViewSystemAdapter implements SystemAdapter, SystemAccessProvider {
 
   @override
   SystemAccess get access =>
-      const SystemAccess(reads: <Type>{SceneNodeRef}, writes: <Type>{});
+      const SystemAccess(reads: <Type>{}, writes: <Type>{SceneNodeRef});
 
   @override
   void run() {
@@ -51,7 +51,7 @@ class $RestartSystemAdapter implements SystemAdapter, SystemAccessProvider {
   $RestartSystemAdapter(this._system);
 
   final RestartSystem _system;
-  late final Query1<SceneNodeRef> _p0;
+  late final Single<SceneNodeRef> _p0;
   late final Query1<SceneNodeRef> _p1;
   late final InputState _p2;
   late final GameState _p3;
@@ -65,9 +65,11 @@ class $RestartSystemAdapter implements SystemAdapter, SystemAccessProvider {
     world.ensureObjectStore<SceneNodeRef>();
     world.ensureTagStore<Player>();
     world.ensureTagStore<Rock>();
-    _p0 = world.query1<SceneNodeRef>(
-      withTypes: const <Type>[Player],
-      withoutTypes: const <Type>[],
+    _p0 = Single<SceneNodeRef>(
+      world.query1<SceneNodeRef>(
+        withTypes: const <Type>[Player],
+        withoutTypes: const <Type>[],
+      ),
     );
     _p1 = world.query1<SceneNodeRef>(
       withTypes: const <Type>[Rock],
@@ -83,7 +85,7 @@ class $RestartSystemAdapter implements SystemAdapter, SystemAccessProvider {
 
   @override
   SystemAccess get access =>
-      const SystemAccess(reads: <Type>{SceneNodeRef}, writes: <Type>{});
+      const SystemAccess(reads: <Type>{}, writes: <Type>{SceneNodeRef});
 
   @override
   void run() {
@@ -123,7 +125,7 @@ class $EvaluateGameRulesAdapter implements SystemAdapter, SystemAccessProvider {
 
   @override
   SystemAccess get access =>
-      const SystemAccess(reads: <Type>{SceneNodeRef}, writes: <Type>{});
+      const SystemAccess(reads: <Type>{}, writes: <Type>{SceneNodeRef});
 
   @override
   void run() {

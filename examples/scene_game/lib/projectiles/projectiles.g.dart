@@ -12,7 +12,7 @@ class $ShootProjectilesSystemAdapter
 
   final ShootProjectilesSystem _system;
   late final Commands _p0;
-  late final Query1<SceneNodeRef> _p1;
+  late final Single<SceneNodeRef> _p1;
   late final InputState _p2;
   late final GameState _p3;
   late final Blaster _p4;
@@ -23,9 +23,11 @@ class $ShootProjectilesSystemAdapter
     world.ensureObjectStore<SceneNodeRef>();
     world.ensureTagStore<Player>();
     _p0 = world.commands;
-    _p1 = world.query1<SceneNodeRef>(
-      withTypes: const <Type>[Player],
-      withoutTypes: const <Type>[],
+    _p1 = Single<SceneNodeRef>(
+      world.query1<SceneNodeRef>(
+        withTypes: const <Type>[Player],
+        withoutTypes: const <Type>[],
+      ),
     );
     _p2 = world.resources.get<InputState>();
     _p3 = world.resources.get<GameState>();

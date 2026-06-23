@@ -49,8 +49,10 @@ final class Game {
 
   /// Mounts entity-bound nodes into the scene. Owned by `Game` (not registered
   /// in a schedule) so it can run *before* the `update` phase — see [_mountStep].
-  late final SceneNodeMountAdapter _mountAdapter =
-      SceneNodeMountAdapter(sceneCommands, _nodeIndex);
+  late final SceneNodeMountAdapter _mountAdapter = SceneNodeMountAdapter(
+    sceneCommands,
+    _nodeIndex,
+  );
 
   late final EcsFrameLoop _loop = EcsFrameLoop(
     app,
@@ -74,13 +76,19 @@ final class Game {
     required this.scene,
     AccessConflictPolicy accessConflictPolicy = AccessConflictPolicy.warn,
     void Function(String message)? onDiagnostic,
+    AppDiagnostics diagnostics = const AppDiagnostics(),
   }) : app = App(
-          accessConflictPolicy: accessConflictPolicy,
-          onDiagnostic: onDiagnostic,
-        );
+         accessConflictPolicy: accessConflictPolicy,
+         onDiagnostic: onDiagnostic,
+         diagnostics: diagnostics,
+       );
 
   /// The ECS world.
   World get world => app.world;
+
+  /// The system profiler, or null when profiling is disabled (see
+  /// `AppDiagnostics`).
+  SystemProfiler? get profiler => app.profiler;
 
   /// Registers [plugin]. Mirrors [App.addPlugin] for fluent setup.
   Game addPlugin(Plugin plugin) {

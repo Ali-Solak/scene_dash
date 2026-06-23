@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../diagnostics/app_diagnostics.dart';
+import '../diagnostics/system_profiler.dart';
 import '../schedule/access_conflict.dart';
 import '../schedule/schedule.dart';
 import '../schedule/schedule_label.dart';
@@ -38,6 +40,10 @@ final class App implements AppBuilder {
   /// Access conflicts detected across all schedules during [start].
   final List<AccessConflict> accessConflicts = <AccessConflict>[];
 
+  /// The system profiler, or null when profiling is disabled. When enabled it is
+  /// also inserted as a `@Resource()` so overlays/systems can read it.
+  final SystemProfiler? profiler;
+
   /// True once schedules have been compiled and frozen.
   bool _finalized = false;
   bool _shutdown = false;
@@ -46,10 +52,31 @@ final class App implements AppBuilder {
   App({
     this.accessConflictPolicy = AccessConflictPolicy.warn,
     this.onDiagnostic,
-  }) {
+    AppDiagnostics diagnostics = const AppDiagnostics(),
+  }) : profiler = _buildProfiler(diagnostics, onDiagnostic) {
     for (final label in Schedules.all) {
       _schedules[label] = Schedule(label);
     }
+    final p = profiler;
+    if (p != null) world.resources.insert<SystemProfiler>(p);
+  }
+
+  /// Builds the profiler from [diagnostics], routing slow-system warnings to the
+  /// explicit sink or, failing that, the app's [onDiagnostic].
+  static SystemProfiler? _buildProfiler(
+    AppDiagnostics diagnostics,
+    void Function(String message)? onDiagnostic,
+  ) {
+    if (!diagnostics.profileSystems) return null;
+    final explicit = diagnostics.onSlowSystem;
+    return SystemProfiler(
+      slowSystemThreshold: diagnostics.slowSystemThreshold,
+      onSlowSystem:
+          explicit ??
+          (onDiagnostic == null
+              ? null
+              : (event) => onDiagnostic(event.toString())),
+    );
   }
 
   /// Registers an additional, custom schedule. Must be called before [start].
@@ -196,7 +223,7 @@ final class App implements AppBuilder {
     if (schedule == null) {
       throw StateError('Unknown schedule: ${label.id}');
     }
-    schedule.run();
+    schedule.run(profiler);
     world.commands.apply();
   }
 

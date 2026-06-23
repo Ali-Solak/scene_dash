@@ -34,7 +34,6 @@ systems work directly with those native objects.
   - [Scene Commands](#scene-commands)
 - [Using flutter_scene Features (No Bridge Needed)](#using-flutter_scene-features-no-bridge-needed)
 - [Physics and Collisions](#physics-and-collisions)
-- [How It Works](#how-it-works)
 - [Packages and Examples](#packages-and-examples)
 - [Verification](#verification)
 
@@ -545,8 +544,8 @@ final class OrbitNodesSystem extends GameSystem {
 }
 ```
 
-The ECS stores the node reference directly. This is less data-oriented than
-Bevy, but much more natural in Flutter and Dart.
+The ECS stores the node reference directly and mutates the native node, which
+keeps visual-only state where `flutter_scene` already holds it.
 
 ### ECS-Owned Transforms
 
@@ -791,103 +790,6 @@ final class CollisionMask {
 That keeps the physics backend swappable: Scene-Dash owns scheduling, resources,
 events, and queries; `flutter_scene` and the selected physics backend own
 colliders, bodies, raycasts, overlap checks, and collision generation.
-
-## How It Works
-
-### Use Objects Instead of Fighting Dart
-
-Trying to emulate Rust structs with generated typed-array cursors everywhere
-adds complexity without a measured advantage for this use case.
-
-The default component model remains:
-
-```dart
-@ObjectComponent()
-final class Velocity {
-  double x;
-  double y;
-  double z;
-
-  Velocity(this.x, this.y, this.z);
-}
-```
-
-Object stores are roughly:
-
-```text
-entity IDs: [4, 9, 12]
-values:     [Velocity(...), Velocity(...), Velocity(...)]
-```
-
-Queries pass direct existing references to systems, and systems mutate those
-objects in place.
-
-### Code Generation Without Runtime Reflection
-
-`source_gen` provides typed injection, generated `SystemDescriptor`s, validated
-bundles, plugin metadata, access metadata, event/channel setup, and specialized
-adapters while the runtime stays explicit and reflection-free.
-
-That gives much of Bevy's authoring ergonomics without pretending Dart has
-Rust's monomorphization or memory model.
-
-Systems use no generated mixin: a `@System` is a plain class (`extends
-GameSystem`) or a top-level function, and the generator emits a top-level
-descriptor such as `movePlayerSystem` that game code passes to
-`app.addSystem(...)`. Identity is `SystemRef(libraryUri, name)`, so ordering by
-descriptor (`after: [readInputSystem]`) turns a rename into a compile error
-rather than a broken string. Bundles still mix in their generated insert adapter,
-and plugins only need a generated mixin when they declare
-`@GamePlugin(requires: [...])`.
-
-### Cache Everything Stable
-
-Generated adapters resolve stable handles once during initialization:
-
-- component stores;
-- resources;
-- event channels;
-- query filters;
-- iteration drivers.
-
-A frame should not repeatedly perform service lookup, reflection, or query
-construction.
-
-### Allocate Nothing Per Matching Entity
-
-Hot queries avoid result lists, records per entity, component copies, iterator
-wrappers, temporary vectors, temporary matrices, and closures created inside the
-inner loop.
-
-The target loop is still simple:
-
-```dart
-query.each((entity, transform, velocity) {
-  transform.x += velocity.x * delta;
-});
-```
-
-### Drive From the Smallest Store
-
-For a query like:
-
-```dart
-@Query(requires: [Player])
-Query2<Transform, Velocity> players
-```
-
-Scene-Dash iterates whichever positive store has the fewest members, then checks
-the rest through sparse arrays. This helps selective gameplay queries, even
-though it is not trying to beat Bevy's table iteration for broad homogeneous
-workloads.
-
-### Avoid Duplicated Scene Data By Default
-
-Duplicating every node transform into ECS state and syncing it every frame is
-not always the best default. For visual-only state, use `SceneNodeRef` and mutate
-the native node. Reach for `SceneTransform` when ECS-owned state actually buys
-you serialization, rollback, networking, renderer independence, or headless
-simulation.
 
 ## Packages and Examples
 

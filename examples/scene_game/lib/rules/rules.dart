@@ -27,6 +27,14 @@ final class RulesPlugin extends Plugin {
       ..insertResource<ImpactMotion>(ImpactMotion())
       ..addSystem(restartSystem, schedule: Schedules.frameStart)
       ..addSystem(evaluateGameRulesSystem, schedule: Schedules.update)
-      ..addSystem(playerViewSystem, schedule: Schedules.update);
+      // playerView reads the ImpactMotion that evaluateGameRules activates and
+      // both write the player node, so make the dependency explicit instead of
+      // relying on registration order. Referencing the descriptor means a rename
+      // is a compile error.
+      ..addSystem(
+        playerViewSystem,
+        schedule: Schedules.update,
+        after: [evaluateGameRulesSystem],
+      );
   }
 }

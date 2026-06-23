@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_scene/scene.dart';
@@ -58,7 +60,6 @@ Future<void> main() async {
       scene: scene,
       game: game,
       input: input,
-      gameState: gameState,
       hudState: hudState,
       cameraRig: cameraRig,
     ),
@@ -71,7 +72,6 @@ class RockDodgeApp extends StatefulWidget {
     required this.scene,
     required this.game,
     required this.input,
-    required this.gameState,
     required this.hudState,
     required this.cameraRig,
   });
@@ -79,7 +79,6 @@ class RockDodgeApp extends StatefulWidget {
   final Scene scene;
   final Game game;
   final InputState input;
-  final GameState gameState;
   final HudState hudState;
   final CameraRig cameraRig;
 
@@ -97,6 +96,12 @@ class _RockDodgeAppState extends State<RockDodgeApp> {
   @override
   void dispose() {
     _focus.dispose();
+    // The widget owns these, so it tears them down: shutting the game down runs
+    // the shutdown schedule and detaches the scene driver (important for hot
+    // restart, navigation and embedding); disposing HudState releases its
+    // ValueNotifier listeners.
+    widget.hudState.dispose();
+    unawaited(widget.game.shutdown());
     super.dispose();
   }
 

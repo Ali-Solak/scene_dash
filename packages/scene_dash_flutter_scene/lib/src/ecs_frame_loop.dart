@@ -32,6 +32,9 @@ final class EcsFrameLoop {
   /// Frame start: update [FrameTime], run [Schedules.frameStart], then advance
   /// event channels for the new frame.
   void frameStart(Duration elapsed, double deltaSeconds) {
+    // Advance the profiler frame counter (if profiling is enabled) at the one
+    // per-frame boundary, so timings can be attributed to a frame number.
+    app.profiler?.beginFrame();
     app.world.resources.get<FrameTime>()
       ..delta = deltaSeconds
       ..elapsed = elapsed

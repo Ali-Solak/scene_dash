@@ -32,7 +32,7 @@ final spawnPlayerSystem = SystemDescriptor(
 );
 
 class $MovePlayerAdapter implements SystemAdapter, SystemAccessProvider {
-  late final Query1<SceneNodeRef> _p0;
+  late final Single<SceneNodeRef> _p0;
   late final InputState _p1;
   late final GameState _p2;
   late final FixedTime _p3;
@@ -41,9 +41,11 @@ class $MovePlayerAdapter implements SystemAdapter, SystemAccessProvider {
   void initialize(World world) {
     world.ensureObjectStore<SceneNodeRef>();
     world.ensureTagStore<Player>();
-    _p0 = world.query1<SceneNodeRef>(
-      withTypes: const <Type>[Player],
-      withoutTypes: const <Type>[],
+    _p0 = Single<SceneNodeRef>(
+      world.query1<SceneNodeRef>(
+        withTypes: const <Type>[Player],
+        withoutTypes: const <Type>[],
+      ),
     );
     _p1 = world.resources.get<InputState>();
     _p2 = world.resources.get<GameState>();
@@ -52,7 +54,7 @@ class $MovePlayerAdapter implements SystemAdapter, SystemAccessProvider {
 
   @override
   SystemAccess get access =>
-      const SystemAccess(reads: <Type>{SceneNodeRef}, writes: <Type>{});
+      const SystemAccess(reads: <Type>{}, writes: <Type>{SceneNodeRef});
 
   @override
   void run() {

@@ -4,8 +4,9 @@ part of 'player.dart';
 ///
 /// The node carries everything physics needs, and [PhysicsDriven] tells the
 /// integration's generic transform sync to leave it alone. The controller owns
-/// the transform while playing; after a hit, rules temporarily switch the body
-/// to dynamic so the player can tumble.
+/// the transform while playing; after a hit, rules keep the body kinematic, zero
+/// its velocities, and drive an authored `ImpactMotion` transform for the
+/// visible tumble.
 @Bundle()
 final class PlayerBundle with _$PlayerBundle {
   final Player player;
@@ -45,7 +46,12 @@ final class PlayerBundle with _$PlayerBundle {
         ),
       )
       ..addComponent(RapierRigidBody(type: BodyType.kinematic))
-      ..addComponent(RapierCollider(shape: SphereShape(radius: playerRadius)))
+      ..addComponent(
+        RapierCollider(
+          shape: SphereShape(radius: playerRadius),
+          collisionLayer: PhysicsLayers.player,
+        ),
+      )
       ..addComponent(
         RapierKinematicCharacterController(
           up: Vector3(0, 1, 0),

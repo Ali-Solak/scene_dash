@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_scene/scene.dart';
 import 'package:scene_dash/scene_dash.dart';
 import 'package:scene_dash_flutter_scene/scene_dash_flutter_scene.dart';
+// Benchmark-only: mountOnly needs the same scene lifecycle driver as Game while
+// intentionally skipping Game's built-in transform-sync registration.
+// ignore: implementation_imports
+import 'package:scene_dash_flutter_scene/src/scene_driver.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
 // Benchmark output is intentionally printed for `flutter run`/adb capture.
@@ -15,6 +18,10 @@ import 'package:vector_math/vector_math.dart' as vm;
 const String _mode = String.fromEnvironment(
   'benchmarkMode',
   defaultValue: 'ecs',
+);
+const bool _profileSystems = bool.fromEnvironment(
+  'profileSystems',
+  defaultValue: false,
 );
 const int _gridSide = int.fromEnvironment('gridSide', defaultValue: 40);
 const int _warmupFrames = int.fromEnvironment('warmupFrames', defaultValue: 90);
@@ -36,6 +43,7 @@ Future<void> main() async {
 
 enum BenchmarkMode {
   staticNodes('static'),
+  mountOnly('mountOnly'),
   ecs('ecs'),
   instanced('instanced');
 
@@ -49,7 +57,7 @@ enum BenchmarkMode {
     throw ArgumentError.value(
       value,
       'benchmarkMode',
-      'Expected static, ecs, or instanced.',
+      'Expected static, mountOnly, ecs, or instanced.',
     );
   }
 }
@@ -61,7 +69,7 @@ final class SceneBenchmark {
     required this.scene,
     required this.camera,
     this.game,
-    this.instancedMesh,
+    this.mountOnlyRuntime,
   });
 
   final BenchmarkMode mode;
@@ -69,8 +77,7 @@ final class SceneBenchmark {
   final Scene scene;
   final PerspectiveCamera camera;
   final Game? game;
-  final InstancedMesh? instancedMesh;
-  double _elapsed = 0;
+  final MountOnlyRuntime? mountOnlyRuntime;
 
   int get visibleCount => gridSide * gridSide;
 
@@ -96,14 +103,31 @@ final class SceneBenchmark {
           scene: scene,
           camera: camera,
         );
+      case BenchmarkMode.mountOnly:
+        final runtime = MountOnlyRuntime(scene: scene)
+          ..app.addSystemAdapter(
+            _SpawnGridAdapter(mesh, gridSide, includeTransform: false),
+            schedule: Schedules.startup,
+            label: const SystemLabel('benchmark.spawnGrid'),
+          );
+        await runtime.start();
+        return SceneBenchmark._(
+          mode: mode,
+          gridSide: gridSide,
+          scene: scene,
+          camera: camera,
+          mountOnlyRuntime: runtime,
+        );
       case BenchmarkMode.ecs:
         final game =
             Game(
                 scene: scene,
-                diagnostics: const AppDiagnostics(profileSystems: true),
+                diagnostics: const AppDiagnostics(
+                  profileSystems: _profileSystems,
+                ),
               )
               ..app.addSystemAdapter(
-                _SpawnGridAdapter(mesh, gridSide),
+                _SpawnGridAdapter(mesh, gridSide, includeTransform: true),
                 schedule: Schedules.startup,
                 label: const SystemLabel('benchmark.spawnGrid'),
               );
@@ -121,7 +145,7 @@ final class SceneBenchmark {
           material: mesh.primitives.single.material,
         );
         for (var i = 0; i < gridSide * gridSide; i++) {
-          instanced.addInstance(_gridMatrix(i, gridSide, 0));
+          instanced.addInstance(_gridMatrix(i, gridSide));
         }
         scene.root.add(Node()..addComponent(InstancedMeshComponent(instanced)));
         return SceneBenchmark._(
@@ -129,26 +153,83 @@ final class SceneBenchmark {
           gridSide: gridSide,
           scene: scene,
           camera: camera,
-          instancedMesh: instanced,
         );
     }
   }
 
   void tick(Duration elapsed, double deltaSeconds) {
-    _elapsed = elapsed.inMicroseconds / Duration.microsecondsPerSecond;
     game?.onTick(elapsed, deltaSeconds);
-
-    final instanced = instancedMesh;
-    if (instanced != null) {
-      final animated = math.max(1, visibleCount ~/ 10);
-      for (var i = 0; i < animated; i++) {
-        instanced.setInstanceTransform(i, _gridMatrix(i, gridSide, _elapsed));
-      }
-    }
+    mountOnlyRuntime?.onTick(elapsed, deltaSeconds);
   }
+
+  void resetProfiler() {
+    game?.profiler?.reset();
+    mountOnlyRuntime?.profiler?.reset();
+  }
+
+  SystemProfiler? get profiler => game?.profiler ?? mountOnlyRuntime?.profiler;
 
   Future<void> dispose() async {
     await game?.shutdown();
+    await mountOnlyRuntime?.shutdown();
+  }
+}
+
+final class MountOnlyRuntime {
+  MountOnlyRuntime({required this.scene})
+    : app = App(
+        diagnostics: const AppDiagnostics(profileSystems: _profileSystems),
+      );
+
+  final Scene scene;
+  final App app;
+
+  late final SceneCommands sceneCommands = SceneCommands(scene.root);
+  final Map<Node, Entity> _nodeIndex = <Node, Entity>{};
+  late final SceneNodeMountAdapter _mountAdapter = SceneNodeMountAdapter(
+    sceneCommands,
+    _nodeIndex,
+  );
+  late final EcsFrameLoop _loop = EcsFrameLoop(
+    app,
+    onCommandBoundary: _mountStep,
+    onFrameEnd: sceneCommands.flush,
+  );
+  EcsSceneDriver? _driver;
+
+  SystemProfiler? get profiler => app.profiler;
+
+  Future<void> start() async {
+    _loop.ensureTimeResources();
+    app.world.resources
+      ..insert<Scene>(scene)
+      ..insert<SceneCommands>(sceneCommands)
+      ..insert<SceneNodeIndex>(SceneNodeIndex(_nodeIndex));
+    app.start();
+    _mountAdapter.initialize(app.world);
+    _mountStep();
+    final driver = EcsSceneDriver(_loop);
+    scene.root.addComponent(driver);
+    _driver = driver;
+  }
+
+  void onTick(Duration elapsed, double deltaSeconds) {
+    _loop.frameStart(elapsed, deltaSeconds);
+  }
+
+  Future<void> shutdown() async {
+    await app.shutdown();
+    final driver = _driver;
+    if (driver != null) {
+      scene.root.removeComponent(driver);
+      _driver = null;
+    }
+    sceneCommands.flush();
+  }
+
+  void _mountStep() {
+    _mountAdapter.run();
+    sceneCommands.flush();
   }
 }
 
@@ -162,8 +243,10 @@ class SceneBenchmarkApp extends StatefulWidget {
 }
 
 class _SceneBenchmarkAppState extends State<SceneBenchmarkApp> {
-  final List<FrameTiming> _samples = <FrameTiming>[];
+  final List<FrameTiming> _measured = <FrameTiming>[];
   late final TimingsCallback _timingsCallback;
+  int _warmupSeen = 0;
+  bool _sampling = false;
   bool _finished = false;
 
   @override
@@ -184,12 +267,16 @@ class _SceneBenchmarkAppState extends State<SceneBenchmarkApp> {
   void _onTimings(List<FrameTiming> timings) {
     if (_finished) return;
     for (final timing in timings) {
-      if (_samples.length < _warmupFrames) {
-        _samples.add(timing);
+      if (!_sampling) {
+        _warmupSeen++;
+        if (_warmupSeen < _warmupFrames) continue;
+        widget.benchmark.resetProfiler();
+        _sampling = true;
         continue;
       }
-      _samples.add(timing);
-      if (_samples.length >= _warmupFrames + _sampleFrames) {
+
+      _measured.add(timing);
+      if (_measured.length >= _sampleFrames) {
         _finished = true;
         _printSummary();
         unawaited(widget.benchmark.dispose().then((_) => exit(0)));
@@ -203,6 +290,7 @@ class _SceneBenchmarkAppState extends State<SceneBenchmarkApp> {
     print(
       'SCENE_BENCHMARK config '
       'mode=${benchmark.mode.id} '
+      'profileSystems=$_profileSystems '
       'gridSide=${benchmark.gridSide} '
       'visible=${benchmark.visibleCount} '
       'warmupFrames=$_warmupFrames '
@@ -211,14 +299,13 @@ class _SceneBenchmarkAppState extends State<SceneBenchmarkApp> {
   }
 
   void _printSummary() {
-    final measured = _samples.skip(_warmupFrames).toList(growable: false);
     final builds =
-        measured
+        _measured
             .map((t) => t.buildDuration.inMicroseconds / 1000)
             .toList(growable: false)
           ..sort();
     final rasters =
-        measured
+        _measured
             .map((t) => t.rasterDuration.inMicroseconds / 1000)
             .toList(growable: false)
           ..sort();
@@ -226,28 +313,15 @@ class _SceneBenchmarkAppState extends State<SceneBenchmarkApp> {
     print(
       'SCENE_BENCHMARK result '
       'mode=${widget.benchmark.mode.id} '
-      'frames=${measured.length} '
+      'profileSystems=$_profileSystems '
+      'frames=${_measured.length} '
       'build_median_ms=${_percentile(builds, 0.50).toStringAsFixed(3)} '
       'build_p95_ms=${_percentile(builds, 0.95).toStringAsFixed(3)} '
       'raster_median_ms=${_percentile(rasters, 0.50).toStringAsFixed(3)} '
       'raster_p95_ms=${_percentile(rasters, 0.95).toStringAsFixed(3)}',
     );
 
-    final profiler = widget.benchmark.game?.profiler;
-    if (profiler != null) {
-      for (final timing in profiler.timings) {
-        print(
-          'SCENE_BENCHMARK system '
-          'mode=${widget.benchmark.mode.id} '
-          'schedule=${timing.schedule.id} '
-          'system=${timing.label.id} '
-          'runs=${timing.runs} '
-          'latest_us=${timing.latestMicros} '
-          'avg_us=${(timing.totalMicros / timing.runs).toStringAsFixed(3)} '
-          'max_us=${timing.maxMicros}',
-        );
-      }
-    }
+    _printSystemTimings(widget.benchmark.mode, widget.benchmark.profiler);
   }
 
   @override
@@ -268,10 +342,11 @@ class _SceneBenchmarkAppState extends State<SceneBenchmarkApp> {
 }
 
 final class _SpawnGridAdapter implements SystemAdapter {
-  _SpawnGridAdapter(this.mesh, this.gridSide);
+  _SpawnGridAdapter(this.mesh, this.gridSide, {required this.includeTransform});
 
   final Mesh mesh;
   final int gridSide;
+  final bool includeTransform;
   late World _world;
 
   @override
@@ -282,32 +357,44 @@ final class _SpawnGridAdapter implements SystemAdapter {
   @override
   void run() {
     for (var i = 0; i < gridSide * gridSide; i++) {
-      _world.commands.spawn(_CubeBundle(mesh, i, gridSide));
+      _world.commands.spawn(
+        _CubeBundle(mesh, i, gridSide, includeTransform: includeTransform),
+      );
     }
   }
 }
 
 final class _CubeBundle implements SceneDashBundle {
-  const _CubeBundle(this.mesh, this.index, this.gridSide);
+  const _CubeBundle(
+    this.mesh,
+    this.index,
+    this.gridSide, {
+    required this.includeTransform,
+  });
 
   final Mesh mesh;
   final int index;
   final int gridSide;
+  final bool includeTransform;
 
   @override
   void insertInto(World world, Entity entity) {
-    final matrix = _gridMatrix(index, gridSide, 0);
-    world
-      ..ensureObjectStore<SceneTransform>()
-      ..ensureObjectStore<SceneNodeRef>()
-      ..insertNow<SceneTransform>(
+    final matrix = _gridMatrix(index, gridSide);
+    world.ensureObjectStore<SceneNodeRef>();
+    if (includeTransform) {
+      world.ensureObjectStore<SceneTransform>();
+      world.insertNow<SceneTransform>(
         entity,
         SceneTransform.trs(
           translation: matrix.getTranslation(),
           scale: vm.Vector3.all(1),
         ),
-      )
-      ..insertNow<SceneNodeRef>(entity, SceneNodeRef(Node(mesh: mesh)));
+      );
+    }
+    world.insertNow<SceneNodeRef>(
+      entity,
+      SceneNodeRef(Node(mesh: mesh, localTransform: matrix)),
+    );
   }
 }
 
@@ -319,18 +406,14 @@ Mesh _cubeMesh() {
 
 void _addStaticNodes(Scene scene, Mesh mesh, int gridSide) {
   for (var i = 0; i < gridSide * gridSide; i++) {
-    scene.root.add(
-      Node(mesh: mesh, localTransform: _gridMatrix(i, gridSide, 0)),
-    );
+    scene.root.add(Node(mesh: mesh, localTransform: _gridMatrix(i, gridSide)));
   }
 }
 
-vm.Matrix4 _gridMatrix(int index, int gridSide, double elapsed) {
+vm.Matrix4 _gridMatrix(int index, int gridSide) {
   final x = (index % gridSide) - (gridSide - 1) * 0.5;
   final z = (index ~/ gridSide) - (gridSide - 1) * 0.5;
-  final animated = index < math.max(1, (gridSide * gridSide) ~/ 10);
-  final y = animated ? math.sin(elapsed * 2.2 + index * 0.17) * 0.25 : 0.0;
-  return vm.Matrix4.translationValues(x * 0.72, y, z * 0.72);
+  return vm.Matrix4.translationValues(x * 0.72, 0, z * 0.72);
 }
 
 double _percentile(List<double> sorted, double p) {
@@ -341,4 +424,21 @@ double _percentile(List<double> sorted, double p) {
   if (low == high) return sorted[low];
   final t = raw - low;
   return sorted[low] * (1 - t) + sorted[high] * t;
+}
+
+void _printSystemTimings(BenchmarkMode mode, SystemProfiler? profiler) {
+  if (profiler == null) return;
+  for (final timing in profiler.timings) {
+    print(
+      'SCENE_BENCHMARK system '
+      'mode=${mode.id} '
+      'profileSystems=$_profileSystems '
+      'schedule=${timing.schedule.id} '
+      'system=${timing.label.id} '
+      'runs=${timing.runs} '
+      'latest_us=${timing.latestMicros} '
+      'avg_us=${(timing.totalMicros / timing.runs).toStringAsFixed(3)} '
+      'max_us=${timing.maxMicros}',
+    );
+  }
 }

@@ -15,6 +15,21 @@ final class SceneNodeRef {
   final Node node;
 
   const SceneNodeRef(this.node);
+
+  /// The first component of type [T] attached to the bound [node], or `null`.
+  ///
+  /// Sugar for `node.getComponent<T>()`, so a system holding a `SceneNodeRef`
+  /// (often via `Single<SceneNodeRef>`) can reach a native `flutter_scene`
+  /// component — a physics body, character controller, collider — without the
+  /// extra `.node` hop:
+  ///
+  /// ```dart
+  /// final controller = player.value.component<RapierKinematicCharacterController>();
+  /// if (controller == null) return;
+  /// ```
+  ///
+  /// Returns `null` when no such component is attached.
+  T? component<T>() => node.getComponent<T>();
 }
 
 /// Tag marking an entity whose node transform is owned by physics (or another

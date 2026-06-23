@@ -164,8 +164,9 @@ final class RestartSystem extends GameSystem {
 
     // Restoring the player resets its native body and transform (reached
     // through SceneNodeRef), hence `writes: [SceneNodeRef]` above.
-    final node = player.value.node;
-    final body = node.getComponent<RapierRigidBody>();
+    final ref = player.value;
+    final node = ref.node;
+    final body = ref.component<RapierRigidBody>();
     if (body != null) {
       body
         ..type = BodyType.kinematic

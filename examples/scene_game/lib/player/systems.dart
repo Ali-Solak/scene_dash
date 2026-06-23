@@ -25,11 +25,14 @@ void movePlayer(
 ) {
   if (game.status != GameStatus.playing) return;
   // The integration mounts the player under the RapierWorld before the first
-  // step, so the node is already in the scene here.
-  final node = player.value.node;
-  final controller = node.getComponent<RapierKinematicCharacterController>();
+  // step, so the node is already in the scene here. Resolve the Single once
+  // (`.value` re-runs the query each access) and reach the native controller
+  // through `SceneNodeRef.component`.
+  final ref = player.value;
+  final controller = ref.component<RapierKinematicCharacterController>();
   if (controller == null) return;
 
+  final node = ref.node;
   final dt = time.delta;
   _snapToRamp(node, knockback);
 

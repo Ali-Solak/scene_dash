@@ -26,6 +26,9 @@ part 'resources.dart';
 part 'bundles.dart';
 part 'vfx.dart';
 part 'systems.dart';
+part 'charge_vfx.dart';
+part 'impact_vfx.dart';
+part 'reticle.dart';
 
 /// Installs the player's blaster: tap-to-burst, hold-to-charge, the charged
 /// projectile, charge VFX, pooled impact VFX and the lock-on reticle.
